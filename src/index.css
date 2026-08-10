@@ -1,0 +1,70 @@
+@import "tailwindcss";
+
+@theme {
+  --color-slate-950: #020617;
+  --color-slate-900: #0f172a;
+  --color-slate-800: #1e293b;
+  --color-slate-700: #334155;
+  --color-slate-400: #94a3b8;
+  --color-slate-200: #e2e8f0;
+  --color-slate-100: #f8fafc;
+  --color-cyan-500: #06b6d4;
+  --color-cyan-400: #22d3ee;
+  --color-cyan-300: #67e8f9;
+  --color-emerald-500: #10b981;
+  --color-amber-500: #f59e0b;
+  --color-red-500: #ef4444;
+}
+
+html {
+  color-scheme: dark;
+  background-color: #020617;
+}
+
+body {
+  background-color: #020617;
+  color: #f8fafc;
+  min-height: 100vh;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+}
+
+/* Scrollbar personalizable */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #090d16;
+}
+::-webkit-scrollbar-thumb {
+  background: #1e293b;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #06b6d4;
+}
+
+/* Animaciones utilitarias */
+@keyframes fade-in {
+  from { opacity: 0 }
+  to { opacity: 1 }
+}
+
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(8px) }
+  to { opacity: 1; transform: translateY(0) }
+}
+
+.animate-fade {
+  animation: fade-in 140ms ease-out both;
+}
+
+.animate-in {
+  animation: fade-in-up 160ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade, .animate-in {
+    animation: none;
+  }
+}
