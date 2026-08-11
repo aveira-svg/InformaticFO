@@ -20,8 +20,9 @@ export function listenTiposEquipo(cb: (tipos: TipoEquipoDoc[]) => void): () => v
 
   fetchTipos()
 
+  const channelId = 'tipos_equipo_' + Math.random().toString(36).substring(2, 9)
   const channel = supabase
-    .channel('public:tipos_equipo')
+    .channel(channelId)
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'tipos_equipo' },

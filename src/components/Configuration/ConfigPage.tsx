@@ -2,14 +2,13 @@ import React, { useEffect, useState } from 'react'
 import { addLugar, listenLugares } from '../../services/lugares'
 import { ensureUniqueCodigo, createEquipo, listenEquipos } from '../../services/equipos'
 import { listenTiposEquipo, createTipoEquipo } from '../../services/tiposEquipo'
-import { listenEventosAgenda, addEventoAgenda } from '../../services/eventosAgenda'
 import { listenProfiles, deleteProfile, adminCreateUser, updateProfile } from '../../services/profiles'
 import { fetchAllDeletedRecords, restoreRecord, type DeletedRecord } from '../../services/recycleBin'
 import { useAuth } from '../../services/AuthContext'
-import type { Lugar, Equipo, TipoEquipoDoc, EstadoEquipo, EventoAgenda, Profile } from '../../types/supabase'
-import { MapPin, Monitor, Layers, Calendar, Users, Trash2, RefreshCcw } from 'lucide-react'
+import type { Lugar, Equipo, TipoEquipoDoc, EstadoEquipo, Profile } from '../../types/supabase'
+import { MapPin, Monitor, Layers, Users, Trash2, RefreshCcw } from 'lucide-react'
 
-type TabType = 'lugares' | 'equipos' | 'tipos' | 'agenda' | 'usuarios' | 'papelera'
+type TabType = 'lugares' | 'equipos' | 'tipos' | 'usuarios' | 'papelera'
 
 export default function ConfigPage() {
   const { profile } = useAuth()
@@ -39,17 +38,6 @@ export default function ConfigPage() {
   const [savingEquipo, setSavingEquipo] = useState(false)
   const [equipos, setEquipos] = useState<Equipo[]>([])
 
-  // Agenda
-  const [eventosAgenda, setEventosAgenda] = useState<EventoAgenda[]>([])
-  const [fechaAgenda, setFechaAgenda] = useState('')
-  const [horaInicioAgenda, setHoraInicioAgenda] = useState('')
-  const [horaFinAgenda, setHoraFinAgenda] = useState('')
-  const [lugarAgenda, setLugarAgenda] = useState('')
-  const [tituloAgenda, setTituloAgenda] = useState('')
-  const [descripcionAgenda, setDescripcionAgenda] = useState('')
-  const [responsableAgenda, setResponsableAgenda] = useState('')
-  const [savingAgenda, setSavingAgenda] = useState(false)
-
   // Usuarios (Admin-only)
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [newUserEmail, setNewUserEmail] = useState('')
@@ -67,14 +55,12 @@ export default function ConfigPage() {
     const off1 = listenLugares(setLugares)
     const off2 = listenEquipos(setEquipos)
     const off3 = listenTiposEquipo(setTiposEquipo)
-    const off4 = listenEventosAgenda(setEventosAgenda)
-    const off5 = listenProfiles(setProfiles)
+    const off4 = listenProfiles(setProfiles)
     return () => {
       off1()
       off2()
       off3()
       off4()
-      off5()
     }
   }, [])
 
@@ -83,12 +69,6 @@ export default function ConfigPage() {
       setTipoEquipoId(tiposEquipo[0].id)
     }
   }, [tiposEquipo, tipoEquipoId])
-
-  useEffect(() => {
-    if (lugares.length > 0 && !lugarAgenda) {
-      setLugarAgenda(lugares[0].id)
-    }
-  }, [lugares, lugarAgenda])
 
   // Cargar registros eliminados cuando se activa el tab de Papelera
   const loadRecycleBin = async () => {
@@ -188,90 +168,12 @@ export default function ConfigPage() {
     }
   }
 
-  // Validar conflicto de horario
-  const validarConflictoHorarios = (
-    fechaStr: string,
-    horaInicio: string,
-    horaFin: string,
-    lugarId: string
-  ): boolean => {
-    const [year, month, day] = fechaStr.split('-').map(Number)
-    const fechaBuscada = new Date(year, month - 1, day)
-    fechaBuscada.setHours(0, 0, 0, 0)
-
-    const [horaInicioH, horaInicioM] = horaInicio.split(':').map(Number)
-    const [horaFinH, horaFinM] = horaFin.split(':').map(Number)
-
-    const inicioNuevo = horaInicioH * 60 + horaInicioM
-    const finNuevo = horaFinH * 60 + horaFinM
-
-    for (const evento of eventosAgenda) {
-      if (evento.lugar_id !== lugarId || !evento.fecha) continue
-
-      const [eYear, eMonth, eDay] = evento.fecha.split('-').map(Number)
-      const fechaEvento = new Date(eYear, eMonth - 1, eDay)
-      fechaEvento.setHours(0, 0, 0, 0)
-
-      if (fechaEvento.getTime() !== fechaBuscada.getTime()) continue
-
-      const [eHoraInicioH, eHoraInicioM] = (evento.hora_inicio || '00:00').split(':').map(Number)
-      const [eHoraFinH, eHoraFinM] = (evento.hora_fin || '00:00').split(':').map(Number)
-
-      const inicioExistente = eHoraInicioH * 60 + eHoraInicioM
-      const finExistente = eHoraFinH * 60 + eHoraFinM
-
-      const hayConflicto =
-        (inicioNuevo >= inicioExistente && inicioNuevo < finExistente) ||
-        (finNuevo > inicioExistente && finNuevo <= finExistente) ||
-        (inicioNuevo <= inicioExistente && finNuevo >= finExistente)
-
-      if (hayConflicto) return true
-    }
-    return false
-  }
-
-  // Handlers Agenda
-  async function onAddEventoAgenda(e: React.FormEvent) {
-    e.preventDefault()
-    if (!fechaAgenda || !horaInicioAgenda || !horaFinAgenda || !lugarAgenda) return
-
-    if (validarConflictoHorarios(fechaAgenda, horaInicioAgenda, horaFinAgenda, lugarAgenda)) {
-      alert('⚠️ Conflicto de Horarios: Ya existe una reserva en ese rango horario para la ubicación elegida.')
-      return
-    }
-
-    setSavingAgenda(true)
-    try {
-      await addEventoAgenda({
-        fecha: fechaAgenda,
-        hora_inicio: horaInicioAgenda,
-        hora_fin: horaFinAgenda,
-        lugar_id: lugarAgenda,
-        titulo: tituloAgenda.trim() || undefined,
-        descripcion: descripcionAgenda.trim() || undefined,
-        responsable: responsableAgenda.trim() || undefined,
-      })
-      setFechaAgenda('')
-      setHoraInicioAgenda('')
-      setHoraFinAgenda('')
-      setTituloAgenda('')
-      setDescripcionAgenda('')
-      setResponsableAgenda('')
-    } catch (err) {
-      console.error(err)
-      alert('Error al agregar el evento')
-    } finally {
-      setSavingAgenda(false)
-    }
-  }
-
   // Admin: Crear usuario
   async function handleCreateUser(e: React.FormEvent) {
     e.preventDefault()
     setUserError('')
     if (!newUserEmail.trim() || !newUserPass.trim() || !newUserShortName.trim()) return
 
-    // Supabase Service Role Key enviada o leída de la variable de entorno
     const secretKey =
       import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY ||
       'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl3bXNua2h6Z2lmY3ZwdnNxeHlnIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4NjM0NDY4NSwiZXhwIjoyMTAxOTIwNjg1fQ.a2YvsH7Z3vEOWJvYqka7AaQVTkZEnxrJB2FxoCz9fR0'
@@ -309,7 +211,7 @@ export default function ConfigPage() {
       {/* Header */}
       <div>
         <h2 className="text-xl font-bold text-slate-100">Configuración & Administración</h2>
-        <p className="text-xs text-slate-400">Gestión de ubicaciones, catálogo de equipos, reservaciones, usuarios y papelera</p>
+        <p className="text-xs text-slate-400">Gestión de ubicaciones, catálogo de equipos, usuarios y papelera de reciclaje</p>
       </div>
 
       {/* Tabs */}
@@ -349,18 +251,6 @@ export default function ConfigPage() {
           >
             <Layers className="size-4" />
             <span>Tipos ({tiposEquipo.length})</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('agenda')}
-            className={`flex-1 min-w-[100px] px-4 py-3 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors ${
-              activeTab === 'agenda'
-                ? 'bg-slate-950 text-cyan-400 border-b-2 border-cyan-400'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
-            }`}
-          >
-            <Calendar className="size-4" />
-            <span>Agenda ({eventosAgenda.length})</span>
           </button>
 
           {isAdmin && (
@@ -545,91 +435,6 @@ export default function ConfigPage() {
               </div>
             ))}
           </div>
-        </div>
-      )}
-
-      {activeTab === 'agenda' && (
-        <div className="card bg-slate-900/90 border border-slate-800 p-5 rounded-xl space-y-4">
-          <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
-            <Calendar className="size-5 text-cyan-400" />
-            <span>Crear Reserva en Agenda / Mantenimiento</span>
-          </h3>
-          <form onSubmit={onAddEventoAgenda} className="space-y-3">
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-              <div>
-                <label className="text-xs font-semibold text-slate-400">Fecha</label>
-                <input
-                  type="date"
-                  required
-                  className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-100 outline-none"
-                  value={fechaAgenda}
-                  onChange={(e) => setFechaAgenda(e.target.value)}
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-semibold text-slate-400">Hora Inicio</label>
-                <input
-                  type="time"
-                  required
-                  className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-100 outline-none"
-                  value={horaInicioAgenda}
-                  onChange={(e) => setHoraInicioAgenda(e.target.value)}
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-semibold text-slate-400">Hora Fin</label>
-                <input
-                  type="time"
-                  required
-                  className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-100 outline-none"
-                  value={horaFinAgenda}
-                  onChange={(e) => setHoraFinAgenda(e.target.value)}
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-semibold text-slate-400">Ubicación / Lugar</label>
-                <select
-                  className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-200 outline-none"
-                  value={lugarAgenda}
-                  onChange={(e) => setLugarAgenda(e.target.value)}
-                >
-                  {lugares.map((l) => (
-                    <option key={l.id} value={l.id}>
-                      {l.nombre}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <input
-                type="text"
-                className="bg-slate-950 border border-slate-800 rounded px-3 py-2 text-xs text-slate-100 outline-none"
-                placeholder="Título de la reserva (ej: Clase Teórica Odontopediatría)"
-                value={tituloAgenda}
-                onChange={(e) => setTituloAgenda(e.target.value)}
-              />
-              <input
-                type="text"
-                className="bg-slate-950 border border-slate-800 rounded px-3 py-2 text-xs text-slate-100 outline-none"
-                placeholder="Responsable o docente a cargo"
-                value={responsableAgenda}
-                onChange={(e) => setResponsableAgenda(e.target.value)}
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={savingAgenda}
-              className="btn bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold py-2 px-4 rounded text-xs cursor-pointer shadow-md shadow-cyan-500/20"
-            >
-              {savingAgenda ? 'Guardando...' : 'Agendar Evento'}
-            </button>
-          </form>
         </div>
       )}
 

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../../services/AuthContext'
 import { listenPendingTasks } from '../../services/tasks'
-import { LayoutDashboard, Monitor, ClipboardList, FileText, Settings, LogOut, User } from 'lucide-react'
+import { LayoutDashboard, Monitor, Calendar, ClipboardList, FileText, Settings, LogOut, User } from 'lucide-react'
 
 interface AppLayoutProps {
   children: React.ReactNode
@@ -25,8 +25,9 @@ export function AppLayout({ children }: AppLayoutProps) {
   const navItems = [
     { label: 'Dashboard', path: '/', icon: LayoutDashboard },
     { label: 'Equipos', path: '/equipos', icon: Monitor },
+    { label: 'Agenda', path: '/agenda', icon: Calendar, adminOnly: true },
     { label: 'Tareas', path: '/tasks', icon: ClipboardList, badge: pendingCount },
-    ...(isAdmin ? [{ label: 'Auditoría', path: '/audit', icon: FileText }] : []),
+    { label: 'Auditoría', path: '/audit', icon: FileText, adminOnly: true },
     { label: 'Configuración', path: '/config', icon: Settings },
   ]
 
@@ -113,6 +114,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             <h2 className="text-sm md:text-base font-bold text-slate-100">
               {location.pathname === '/' && 'Dashboard de Infraestructura'}
               {location.pathname === '/equipos' && 'Inventario de Equipos'}
+              {location.pathname === '/agenda' && 'Agenda de Aulas y Eventos'}
               {location.pathname === '/tasks' && 'Tareas y Mantenimiento'}
               {location.pathname === '/audit' && 'Logs de Auditoría'}
               {location.pathname === '/config' && 'Panel de Configuración'}

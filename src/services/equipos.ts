@@ -119,8 +119,9 @@ export function listenEquipos(cb: (equipos: Equipo[]) => void): () => void {
 
   fetchEquipos()
 
+  const channelId = 'equipos_' + Math.random().toString(36).substring(2, 9)
   const channel = supabase
-    .channel('public:equipos')
+    .channel(channelId)
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'equipos' },

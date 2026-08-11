@@ -54,8 +54,9 @@ export function listenRecentLogs(cb: (logs: AuditLog[]) => void, limitCount = 50
 
   fetchRecent()
 
+  const channelId = 'audit_logs_recent_' + Math.random().toString(36).substring(2, 9)
   const channel = supabase
-    .channel('public:audit_logs_recent')
+    .channel(channelId)
     .on(
       'postgres_changes',
       { event: 'INSERT', schema: 'public', table: 'audit_logs' },

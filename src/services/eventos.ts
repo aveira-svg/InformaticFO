@@ -46,8 +46,9 @@ export function listenEventos(cb: (eventos: EventoItem[]) => void, limitCount = 
 
   fetchLogs()
 
+  const channelId = 'audit_logs_eventos_' + Math.random().toString(36).substring(2, 9)
   const channel = supabase
-    .channel('public:audit_logs_eventos')
+    .channel(channelId)
     .on(
       'postgres_changes',
       { event: 'INSERT', schema: 'public', table: 'audit_logs' },

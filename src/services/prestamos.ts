@@ -22,8 +22,9 @@ export function listenPrestamosActivos(cb: (prestamos: Prestamo[]) => void) {
 
   fetchActivos()
 
+  const channelId = 'prestamos_activos_' + Math.random().toString(36).substring(2, 9)
   const channel = supabase
-    .channel('public:prestamos_activos')
+    .channel(channelId)
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'prestamos' },
@@ -57,8 +58,9 @@ export function listenTodosPrestamos(cb: (prestamos: Prestamo[]) => void) {
 
   fetchTodos()
 
+  const channelId = 'prestamos_todos_' + Math.random().toString(36).substring(2, 9)
   const channel = supabase
-    .channel('public:prestamos_todos')
+    .channel(channelId)
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'prestamos' },

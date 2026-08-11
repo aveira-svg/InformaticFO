@@ -18,12 +18,11 @@ export function listenLugares(cb: (lugares: Lugar[]) => void) {
       })
   }
 
-  // Carga inicial
   fetchLugares()
 
-  // Suscripción en tiempo real
+  const channelId = 'lugares_' + Math.random().toString(36).substring(2, 9)
   const channel = supabase
-    .channel('public:lugares')
+    .channel(channelId)
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'lugares' },

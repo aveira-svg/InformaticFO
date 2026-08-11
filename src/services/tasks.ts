@@ -24,8 +24,9 @@ export function listenPendingTasks(cb: (tasks: any[]) => void) {
 
   fetchTasks()
 
+  const channelId = 'tasks_pending_' + Math.random().toString(36).substring(2, 9)
   const channel = supabase
-    .channel('public:tasks_pending')
+    .channel(channelId)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => fetchTasks())
     .on('postgres_changes', { event: '*', schema: 'public', table: 'task_assignments' }, () => fetchTasks())
     .subscribe()
@@ -59,8 +60,9 @@ export function listenCompletedTasks(cb: (tasks: any[]) => void) {
 
   fetchCompleted()
 
+  const channelId = 'tasks_completed_' + Math.random().toString(36).substring(2, 9)
   const channel = supabase
-    .channel('public:tasks_completed')
+    .channel(channelId)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => fetchCompleted())
     .on('postgres_changes', { event: '*', schema: 'public', table: 'task_assignments' }, () => fetchCompleted())
     .subscribe()
@@ -143,8 +145,9 @@ export function listenTaskUpdates(taskId: string, cb: (updates: any[]) => void) 
 
   fetchUpdates()
 
+  const channelId = `task_updates_${taskId}_` + Math.random().toString(36).substring(2, 9)
   const channel = supabase
-    .channel(`public:task_updates:${taskId}`)
+    .channel(channelId)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'task_updates', filter: `task_id=eq.${taskId}` }, () => fetchUpdates())
     .subscribe()
 
