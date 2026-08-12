@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react'
-import { addLugar, listenLugares } from '../../services/lugares'
-import { ensureUniqueCodigo, createEquipo, listenEquipos } from '../../services/equipos'
-import { listenTiposEquipo, createTipoEquipo } from '../../services/tiposEquipo'
-import { listenProfiles, deleteProfile, adminCreateUser, updateProfile } from '../../services/profiles'
+import { addLugar, listenLugares, getLugares, updateLugar } from '../../services/lugares'
+import { ensureUniqueCodigo, createEquipo, listenEquipos, deleteEquipo, getEquipos, updateEquipo } from '../../services/equipos'
+import { listenTiposEquipo, createTipoEquipo, getTiposEquipo, updateTipoEquipo } from '../../services/tiposEquipo'
+import { listenProfiles, deleteProfile, adminCreateUser, updateProfile, getProfiles } from '../../services/profiles'
 import { fetchAllDeletedRecords, restoreRecord, type DeletedRecord } from '../../services/recycleBin'
 import { useAuth } from '../../services/AuthContext'
 import type { Lugar, Equipo, TipoEquipoDoc, EstadoEquipo, Profile } from '../../types/supabase'
-import { MapPin, Monitor, Layers, Users, Trash2, RefreshCcw } from 'lucide-react'
+import { MapPin, Monitor, Layers, Users, Trash2, RefreshCcw, Pencil, X, Check } from 'lucide-react'
 
 type TabType = 'lugares' | 'equipos' | 'tipos' | 'usuarios' | 'papelera'
 
@@ -20,11 +20,16 @@ export default function ConfigPage() {
   const [nombreLugar, setNombreLugar] = useState('')
   const [descLugar, setDescLugar] = useState('')
   const [savingLugar, setSavingLugar] = useState(false)
+  const [editingLugar, setEditingLugar] = useState<Lugar | null>(null)
+  const [editNombreLugar, setEditNombreLugar] = useState('')
+  const [editDescLugar, setEditDescLugar] = useState('')
 
   // Tipos de equipo
   const [tiposEquipo, setTiposEquipo] = useState<TipoEquipoDoc[]>([])
   const [nombreTipo, setNombreTipo] = useState('')
   const [savingTipo, setSavingTipo] = useState(false)
+  const [editingTipo, setEditingTipo] = useState<TipoEquipoDoc | null>(null)
+  const [editNombreTipo, setEditNombreTipo] = useState('')
 
   // Equipos
   const [codigo, setCodigo] = useState('')
@@ -32,11 +37,13 @@ export default function ConfigPage() {
   const [tipoEquipoId, setTipoEquipoId] = useState('')
   const [marca, setMarca] = useState('')
   const [modelo, setModelo] = useState('')
+  const [personalACargo, setPersonalACargo] = useState('')
   const [estado, setEstado] = useState<EstadoEquipo>('disponible')
   const [isUnique, setIsUnique] = useState<boolean | null>(null)
   const [checkingCode, setCheckingCode] = useState(false)
   const [savingEquipo, setSavingEquipo] = useState(false)
   const [equipos, setEquipos] = useState<Equipo[]>([])
+  const [editingEquipo, setEditingEquipo] = useState<Equipo | null>(null)
 
   // Usuarios (Admin-only)
   const [profiles, setProfiles] = useState<Profile[]>([])
@@ -113,6 +120,8 @@ export default function ConfigPage() {
       await addLugar(nombreLugar.trim(), descLugar.trim())
       setNombreLugar('')
       setDescLugar('')
+      const fresh = await getLugares()
+      setLugares(fresh)
     } catch (err) {
       console.error(err)
       alert('Error al agregar el lugar')
@@ -134,20 +143,83 @@ export default function ConfigPage() {
         tipo: tipoEquipoId || tiposEquipo[0]?.id || 'General',
         marca: marca.trim() || undefined,
         modelo: modelo.trim() || undefined,
+        personal_a_cargo: personalACargo.trim() || undefined,
         estado,
         ubicacion_actual: '',
+        historico: false,
       })
       setCodigo('')
       setNombreEquipo('')
       setMarca('')
       setModelo('')
+      setPersonalACargo('')
       setEstado('disponible')
       setIsUnique(null)
+      const fresh = await getEquipos()
+      setEquipos(fresh)
     } catch (err) {
       console.error(err)
       alert('Error al crear el equipo')
     } finally {
       setSavingEquipo(false)
+    }
+  }
+
+  // Handlers Edición Lugares
+  async function onUpdateLugar(e: React.FormEvent) {
+    e.preventDefault()
+    if (!editingLugar || !editNombreLugar.trim()) return
+    try {
+      await updateLugar(editingLugar.id, {
+        nombre: editNombreLugar.trim(),
+        descripcion: editDescLugar.trim(),
+      })
+      setEditingLugar(null)
+      const fresh = await getLugares()
+      setLugares(fresh)
+    } catch (err) {
+      console.error(err)
+      alert('Error al actualizar el lugar')
+    }
+  }
+
+  // Handlers Edición Equipos
+  async function onUpdateEquipo(e: React.FormEvent) {
+    e.preventDefault()
+    if (!editingEquipo) return
+    try {
+      await updateEquipo(editingEquipo.id, {
+        codigo_unico: editingEquipo.codigo_unico.trim().toUpperCase(),
+        nombre: editingEquipo.nombre.trim(),
+        tipo: editingEquipo.tipo,
+        marca: editingEquipo.marca?.trim() || undefined,
+        modelo: editingEquipo.modelo?.trim() || undefined,
+        personal_a_cargo: editingEquipo.personal_a_cargo?.trim() || undefined,
+        estado: editingEquipo.estado,
+      })
+      setEditingEquipo(null)
+      const fresh = await getEquipos()
+      setEquipos(fresh)
+    } catch (err) {
+      console.error(err)
+      alert('Error al actualizar el equipo')
+    }
+  }
+
+  // Handlers Edición Tipos
+  async function onUpdateTipo(e: React.FormEvent) {
+    e.preventDefault()
+    if (!editingTipo || !editNombreTipo.trim()) return
+    try {
+      await updateTipoEquipo(editingTipo.id, {
+        nombre: editNombreTipo.trim(),
+      })
+      setEditingTipo(null)
+      const fresh = await getTiposEquipo()
+      setTiposEquipo(fresh)
+    } catch (err) {
+      console.error(err)
+      alert('Error al actualizar el tipo de equipo')
     }
   }
 
@@ -160,6 +232,8 @@ export default function ConfigPage() {
       const id = nombreTipo.trim().toLowerCase().replace(/\s+/g, '_')
       await createTipoEquipo(id, nombreTipo.trim())
       setNombreTipo('')
+      const fresh = await getTiposEquipo()
+      setTiposEquipo(fresh)
     } catch (err) {
       console.error(err)
       alert('Error al agregar el tipo de equipo')
@@ -186,6 +260,8 @@ export default function ConfigPage() {
       setNewUserPass('')
       setNewUserShortName('')
       setNewUserRole('user')
+      const fresh = await getProfiles()
+      setProfiles(fresh)
     } catch (err: any) {
       console.error(err)
       setUserError(err.message || 'Error al crear usuario.')
@@ -200,11 +276,23 @@ export default function ConfigPage() {
       await restoreRecord(rec.tableName, rec.id)
       alert(`Registro "${rec.title}" restaurado exitosamente.`)
       loadRecycleBin()
+      const [fLugares, fEquipos, fTipos, fProfiles] = await Promise.all([
+        getLugares(),
+        getEquipos(),
+        getTiposEquipo(),
+        getProfiles(),
+      ])
+      setLugares(fLugares)
+      setEquipos(fEquipos)
+      setTiposEquipo(fTipos)
+      setProfiles(fProfiles)
     } catch (err) {
       console.error(err)
       alert('Error al restaurar el registro.')
     }
   }
+
+  const equiposPrestamo = equipos.filter((e) => e.historico !== true)
 
   return (
     <div className="space-y-6">
@@ -238,7 +326,7 @@ export default function ConfigPage() {
             }`}
           >
             <Monitor className="size-4" />
-            <span>Equipos ({equipos.length})</span>
+            <span>Equipos Préstamo ({equiposPrestamo.length})</span>
           </button>
 
           <button
@@ -323,17 +411,66 @@ export default function ConfigPage() {
                   key={l.id}
                   className="p-3 bg-slate-950 border border-slate-800 rounded-lg flex items-center justify-between text-xs"
                 >
-                  <div>
-                    <p className="font-semibold text-slate-200">{l.nombre}</p>
-                    {l.descripcion && <p className="text-[11px] text-slate-500">{l.descripcion}</p>}
-                  </div>
-                  <span
-                    className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
-                      l.activo ? 'bg-emerald-500/10 text-emerald-400' : 'bg-slate-800 text-slate-500'
-                    }`}
-                  >
-                    {l.activo ? 'Activo' : 'Inactivo'}
-                  </span>
+                  {editingLugar?.id === l.id ? (
+                    <form onSubmit={onUpdateLugar} className="flex-1 flex flex-col gap-2">
+                      <input
+                        type="text"
+                        required
+                        className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-100 outline-none focus:border-cyan-500"
+                        value={editNombreLugar}
+                        onChange={(e) => setEditNombreLugar(e.target.value)}
+                      />
+                      <input
+                        type="text"
+                        className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-100 outline-none focus:border-cyan-500"
+                        placeholder="Descripción..."
+                        value={editDescLugar}
+                        onChange={(e) => setEditDescLugar(e.target.value)}
+                      />
+                      <div className="flex gap-1 justify-end mt-1">
+                        <button
+                          type="button"
+                          onClick={() => setEditingLugar(null)}
+                          className="p-1 text-slate-400 hover:text-slate-200 rounded"
+                        >
+                          <X className="size-4" />
+                        </button>
+                        <button
+                          type="submit"
+                          className="p-1 bg-cyan-500 hover:bg-cyan-400 text-slate-950 rounded font-semibold"
+                        >
+                          <Check className="size-4" />
+                        </button>
+                      </div>
+                    </form>
+                  ) : (
+                    <>
+                      <div>
+                        <p className="font-semibold text-slate-200">{l.nombre}</p>
+                        {l.descripcion && <p className="text-[11px] text-slate-500">{l.descripcion}</p>}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
+                            l.activo ? 'bg-emerald-500/10 text-emerald-400' : 'bg-slate-800 text-slate-500'
+                          }`}
+                        >
+                          {l.activo ? 'Activo' : 'Inactivo'}
+                        </span>
+                        <button
+                          onClick={() => {
+                            setEditingLugar(l)
+                            setEditNombreLugar(l.nombre)
+                            setEditDescLugar(l.descripcion || '')
+                          }}
+                          title="Editar lugar"
+                          className="text-slate-400 hover:text-cyan-300 p-1 rounded hover:bg-slate-900"
+                        >
+                          <Pencil className="size-4" />
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
               ))}
             </div>
@@ -342,64 +479,304 @@ export default function ConfigPage() {
       )}
 
       {activeTab === 'equipos' && (
-        <div className="card bg-slate-900/90 border border-slate-800 p-5 rounded-xl space-y-4">
-          <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
-            <Monitor className="size-5 text-cyan-400" />
-            <span>Registrar Nuevo Equipo en Catálogo</span>
-          </h3>
-          <form onSubmit={onAddEquipo} className="space-y-3">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div>
-                <label className="text-xs font-semibold text-slate-400">Código Único</label>
-                <input
-                  type="text"
-                  required
-                  className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-xs text-cyan-300 font-mono outline-none focus:border-cyan-500"
-                  placeholder="PROY001"
-                  value={codigo}
-                  onChange={(e) => setCodigo(e.target.value)}
-                />
-                {checkingCode && <span className="text-[10px] text-slate-500">Verificando...</span>}
-                {isUnique === false && <span className="text-[10px] text-red-400">Código duplicado</span>}
-                {isUnique === true && <span className="text-[10px] text-emerald-400">Disponible</span>}
+        <div className="card bg-slate-900/90 border border-slate-800 p-5 rounded-xl space-y-6">
+          <div className="space-y-4">
+            <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
+              <Monitor className="size-5 text-cyan-400" />
+              <span>Registrar Nuevo Equipo para Préstamo</span>
+            </h3>
+            <form onSubmit={onAddEquipo} className="space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-slate-400">Código Único</label>
+                  <input
+                    type="text"
+                    required
+                    className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-xs text-cyan-300 font-mono outline-none focus:border-cyan-500"
+                    placeholder="PROY001"
+                    value={codigo}
+                    onChange={(e) => setCodigo(e.target.value)}
+                  />
+                  {checkingCode && <span className="text-[10px] text-slate-500">Verificando...</span>}
+                  {isUnique === false && <span className="text-[10px] text-red-400">Código duplicado</span>}
+                  {isUnique === true && <span className="text-[10px] text-emerald-400">Disponible</span>}
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-400">Nombre del Equipo</label>
+                  <input
+                    type="text"
+                    required
+                    className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-xs text-slate-100 outline-none focus:border-cyan-500"
+                    placeholder="Proyector Epson"
+                    value={nombreEquipo}
+                    onChange={(e) => setNombreEquipo(e.target.value)}
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-400">Tipo de Equipo</label>
+                  <select
+                    className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-xs text-slate-200 outline-none"
+                    value={tipoEquipoId}
+                    onChange={(e) => setTipoEquipoId(e.target.value)}
+                  >
+                    {tiposEquipo.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
-              <div>
-                <label className="text-xs font-semibold text-slate-400">Nombre del Equipo</label>
-                <input
-                  type="text"
-                  required
-                  className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-xs text-slate-100 outline-none focus:border-cyan-500"
-                  placeholder="Proyector Epson"
-                  value={nombreEquipo}
-                  onChange={(e) => setNombreEquipo(e.target.value)}
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-slate-400">Marca (Opcional)</label>
+                  <input
+                    type="text"
+                    className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-xs text-slate-100 outline-none focus:border-cyan-500"
+                    placeholder="Epson, HP, Sony..."
+                    value={marca}
+                    onChange={(e) => setMarca(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-400">Modelo (Opcional)</label>
+                  <input
+                    type="text"
+                    className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-xs text-slate-100 outline-none focus:border-cyan-500"
+                    placeholder="PowerLite X49..."
+                    value={modelo}
+                    onChange={(e) => setModelo(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-400">Personal a Cargo (Opcional)</label>
+                  {profiles.length > 0 ? (
+                    <select
+                      className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-xs text-slate-200 outline-none"
+                      value={personalACargo}
+                      onChange={(e) => setPersonalACargo(e.target.value)}
+                    >
+                      <option value="">-- Seleccionar Personal --</option>
+                      {profiles.map((p) => (
+                        <option key={p.id} value={p.short_name}>
+                          {p.short_name} ({p.email})
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-xs text-slate-100 outline-none focus:border-cyan-500"
+                      placeholder="Nombre del personal..."
+                      value={personalACargo}
+                      onChange={(e) => setPersonalACargo(e.target.value)}
+                    />
+                  )}
+                </div>
               </div>
 
-              <div>
-                <label className="text-xs font-semibold text-slate-400">Tipo de Equipo</label>
-                <select
-                  className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-xs text-slate-200 outline-none"
-                  value={tipoEquipoId}
-                  onChange={(e) => setTipoEquipoId(e.target.value)}
-                >
-                  {tiposEquipo.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.nombre}
-                    </option>
-                  ))}
-                </select>
+              <button
+                type="submit"
+                disabled={savingEquipo || isUnique === false}
+                className="btn bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold py-2 px-4 rounded text-xs cursor-pointer shadow-md shadow-cyan-500/20"
+              >
+                {savingEquipo ? 'Guardando...' : 'Registrar Equipo'}
+              </button>
+            </form>
+          </div>
+
+          <div className="border-t border-slate-800 pt-4 space-y-3">
+            <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+              Equipos Habilitados para Préstamo ({equiposPrestamo.length})
+            </h4>
+
+            {equiposPrestamo.length === 0 ? (
+              <p className="text-xs text-slate-500 py-4 text-center">No hay equipos cargados para préstamo.</p>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {equiposPrestamo.map((eq) => {
+                  const tipoObj = tiposEquipo.find((t) => t.id === eq.tipo)
+                  return (
+                    <div
+                      key={eq.id}
+                      className="p-3 bg-slate-950 border border-slate-800 rounded-xl flex items-center justify-between gap-2"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-xs font-bold text-cyan-300 bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
+                            {eq.codigo_unico}
+                          </span>
+                          <span
+                            className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
+                              eq.estado === 'disponible'
+                                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                : eq.estado === 'en_uso'
+                                ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20'
+                                : eq.estado === 'mantenimiento'
+                                ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                                : 'bg-red-500/10 text-red-400 border-red-500/20'
+                            }`}
+                          >
+                            {eq.estado}
+                          </span>
+                        </div>
+                        <p className="text-xs font-semibold text-slate-200 mt-1 truncate">{eq.nombre}</p>
+                        <p className="text-[11px] text-slate-400 truncate">
+                          {tipoObj?.nombre || eq.tipo} {eq.marca ? `• ${eq.marca}` : ''} {eq.modelo ? `(${eq.modelo})` : ''}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => setEditingEquipo(eq)}
+                          title="Editar equipo"
+                          className="text-slate-500 hover:text-cyan-300 p-1.5 rounded-lg hover:bg-slate-900 transition cursor-pointer"
+                        >
+                          <Pencil className="size-4" />
+                        </button>
+                        <button
+                          onClick={async () => {
+                            if (confirm(`¿Eliminar equipo "${eq.codigo_unico} - ${eq.nombre}"?`)) {
+                              await deleteEquipo(eq.id)
+                              const fresh = await getEquipos()
+                              setEquipos(fresh)
+                            }
+                          }}
+                          title="Eliminar equipo"
+                          className="text-slate-500 hover:text-red-400 p-1.5 rounded-lg hover:bg-red-950/40 transition cursor-pointer"
+                        >
+                          <Trash2 className="size-4" />
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Modal Edición de Equipo */}
+          {editingEquipo && (
+            <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+              <div className="w-full max-w-lg card bg-slate-900 border border-slate-800 p-5 rounded-xl text-slate-100 shadow-2xl space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                  <h3 className="font-bold text-cyan-400 text-sm flex items-center gap-2">
+                    <Pencil className="size-4" />
+                    <span>Editar Equipo de Préstamo</span>
+                  </h3>
+                  <button
+                    onClick={() => setEditingEquipo(null)}
+                    className="text-slate-400 hover:text-slate-200 p-1 rounded"
+                  >
+                    <X className="size-5" />
+                  </button>
+                </div>
+
+                <form onSubmit={onUpdateEquipo} className="space-y-3 text-xs">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="font-semibold text-slate-400">Código Único</label>
+                      <input
+                        type="text"
+                        required
+                        className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-cyan-300 font-mono outline-none focus:border-cyan-500"
+                        value={editingEquipo.codigo_unico}
+                        onChange={(e) => setEditingEquipo({ ...editingEquipo, codigo_unico: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="font-semibold text-slate-400">Nombre del Equipo</label>
+                      <input
+                        type="text"
+                        required
+                        className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-slate-100 outline-none focus:border-cyan-500"
+                        value={editingEquipo.nombre}
+                        onChange={(e) => setEditingEquipo({ ...editingEquipo, nombre: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="font-semibold text-slate-400">Tipo de Equipo</label>
+                      <select
+                        className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-slate-200 outline-none"
+                        value={editingEquipo.tipo}
+                        onChange={(e) => setEditingEquipo({ ...editingEquipo, tipo: e.target.value })}
+                      >
+                        {tiposEquipo.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.nombre}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="font-semibold text-slate-400">Estado</label>
+                      <select
+                        className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-slate-200 outline-none"
+                        value={editingEquipo.estado}
+                        onChange={(e) => setEditingEquipo({ ...editingEquipo, estado: e.target.value as EstadoEquipo })}
+                      >
+                        <option value="disponible">Disponible</option>
+                        <option value="en_uso">En Uso</option>
+                        <option value="mantenimiento">Mantenimiento</option>
+                        <option value="de_baja">De Baja</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <label className="font-semibold text-slate-400">Marca</label>
+                      <input
+                        type="text"
+                        className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-slate-100 outline-none focus:border-cyan-500"
+                        value={editingEquipo.marca || ''}
+                        onChange={(e) => setEditingEquipo({ ...editingEquipo, marca: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="font-semibold text-slate-400">Modelo</label>
+                      <input
+                        type="text"
+                        className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-slate-100 outline-none focus:border-cyan-500"
+                        value={editingEquipo.modelo || ''}
+                        onChange={(e) => setEditingEquipo({ ...editingEquipo, modelo: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="font-semibold text-slate-400">Personal a Cargo</label>
+                      <input
+                        type="text"
+                        className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-slate-100 outline-none focus:border-cyan-500"
+                        value={editingEquipo.personal_a_cargo || ''}
+                        onChange={(e) => setEditingEquipo({ ...editingEquipo, personal_a_cargo: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-3 border-t border-slate-800">
+                    <button
+                      type="button"
+                      onClick={() => setEditingEquipo(null)}
+                      className="btn bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="submit"
+                      className="btn bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold px-4 py-1.5 rounded shadow-md shadow-cyan-500/20"
+                    >
+                      Guardar Cambios
+                    </button>
+                  </div>
+                </form>
               </div>
             </div>
-
-            <button
-              type="submit"
-              disabled={savingEquipo || isUnique === false}
-              className="btn bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold py-2 px-4 rounded text-xs cursor-pointer shadow-md shadow-cyan-500/20"
-            >
-              {savingEquipo ? 'Guardando...' : 'Registrar Equipo'}
-            </button>
-          </form>
+          )}
         </div>
       )}
 
@@ -430,8 +807,47 @@ export default function ConfigPage() {
           <div className="border-t border-slate-800 pt-3 space-y-2">
             {tiposEquipo.map((t) => (
               <div key={t.id} className="p-2.5 bg-slate-950 border border-slate-800 rounded flex justify-between items-center text-xs">
-                <span className="font-semibold text-slate-200">{t.nombre}</span>
-                <span className="text-[10px] text-slate-500 font-mono">ID: {t.id}</span>
+                {editingTipo?.id === t.id ? (
+                  <form onSubmit={onUpdateTipo} className="flex-1 flex items-center gap-2">
+                    <input
+                      type="text"
+                      required
+                      className="flex-1 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-100 outline-none focus:border-cyan-500"
+                      value={editNombreTipo}
+                      onChange={(e) => setEditNombreTipo(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setEditingTipo(null)}
+                      className="p-1 text-slate-400 hover:text-slate-200 rounded"
+                    >
+                      <X className="size-4" />
+                    </button>
+                    <button
+                      type="submit"
+                      className="p-1 bg-cyan-500 hover:bg-cyan-400 text-slate-950 rounded font-semibold"
+                    >
+                      <Check className="size-4" />
+                    </button>
+                  </form>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-slate-200">{t.nombre}</span>
+                      <span className="text-[10px] text-slate-500 font-mono">ID: {t.id}</span>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setEditingTipo(t)
+                        setEditNombreTipo(t.nombre)
+                      }}
+                      title="Editar categoría"
+                      className="text-slate-400 hover:text-cyan-300 p-1 rounded hover:bg-slate-900 cursor-pointer"
+                    >
+                      <Pencil className="size-4" />
+                    </button>
+                  </>
+                )}
               </div>
             ))}
           </div>
@@ -541,6 +957,8 @@ export default function ConfigPage() {
                         const newRole = p.role === 'admin' ? 'user' : 'admin'
                         if (confirm(`¿Cambiar el rol de ${p.short_name} a ${newRole}?`)) {
                           await updateProfile(p.id, { role: newRole })
+                          const fresh = await getProfiles()
+                          setProfiles(fresh)
                         }
                       }}
                       className="btn bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1 text-[11px] rounded cursor-pointer"
@@ -551,6 +969,8 @@ export default function ConfigPage() {
                       onClick={async () => {
                         if (confirm(`¿Dar de baja lógica al usuario ${p.short_name}? Su acceso será bloqueado.`)) {
                           await deleteProfile(p.id)
+                          const fresh = await getProfiles()
+                          setProfiles(fresh)
                         }
                       }}
                       className="btn bg-red-950/60 hover:bg-red-900 text-red-300 border border-red-800 px-2 py-1 text-[11px] rounded cursor-pointer"

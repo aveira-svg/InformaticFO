@@ -1,21 +1,22 @@
 import { supabase, getSupabaseAdmin } from './supabaseClient'
 import type { Profile } from '../types/supabase'
 
+// Obtener perfiles activos
+export async function getProfiles(): Promise<Profile[]> {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('is_deleted', false)
+    .order('created_at', { ascending: false })
+
+  if (error || !data) return []
+  return data
+}
+
 // Escuchar perfiles activos en tiempo real (excluyendo eliminados)
 export function listenProfiles(cb: (profiles: Profile[]) => void) {
   const fetchProfiles = () => {
-    supabase
-      .from('profiles')
-      .select('*')
-      .eq('is_deleted', false)
-      .order('short_name')
-      .then(({ data, error }) => {
-        if (!error && data) {
-          cb(data)
-        } else if (error) {
-          console.error('Error fetching profiles:', error)
-        }
-      })
+    getProfiles().then(cb)
   }
 
   fetchProfiles()

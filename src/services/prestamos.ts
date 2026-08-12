@@ -2,6 +2,29 @@ import { supabase } from './supabaseClient'
 import type { Prestamo } from '../types/supabase'
 import { updateEquipoEstado } from './equipos'
 
+// Obtener préstamos activos directamente
+export async function getPrestamosActivos(): Promise<Prestamo[]> {
+  const { data, error } = await supabase
+    .from('prestamos')
+    .select('*')
+    .eq('estado', 'prestado')
+    .eq('is_deleted', false)
+    .order('fecha_prestamo', { ascending: false })
+  if (error || !data) return []
+  return data
+}
+
+// Obtener todos los préstamos directamente
+export async function getTodosPrestamos(): Promise<Prestamo[]> {
+  const { data, error } = await supabase
+    .from('prestamos')
+    .select('*')
+    .eq('is_deleted', false)
+    .order('fecha_prestamo', { ascending: false })
+  if (error || !data) return []
+  return data
+}
+
 // Escuchar préstamos activos en tiempo real (estado = 'prestado')
 export function listenPrestamosActivos(cb: (prestamos: Prestamo[]) => void) {
   const fetchActivos = () => {

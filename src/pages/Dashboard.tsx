@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { listenLugares, setEstadoLugar } from '../services/lugares'
-import { listenPrestamosActivos, listenTodosPrestamos } from '../services/prestamos'
+import { listenLugares, setEstadoLugar, getLugares } from '../services/lugares'
+import { listenPrestamosActivos, listenTodosPrestamos, getPrestamosActivos, getTodosPrestamos } from '../services/prestamos'
 import { listenEventosAgenda } from '../services/eventosAgenda'
 import { getEquiposByIds } from '../services/equipos'
 import type { Lugar, Prestamo, EventoAgenda, Equipo } from '../types/supabase'
@@ -8,7 +8,9 @@ import { LocationCard } from '../components/LocationCard/LocationCard'
 import { EventLog } from '../components/EventLog/EventLog'
 import { LoanForm } from '../components/LoanForm/LoanForm'
 import { RecoverForm } from '../components/LoanForm/RecoverForm'
-import { Bell, Monitor, RefreshCw, CheckCircle } from 'lucide-react'
+import { PersonalLoanForm } from '../components/LoanForm/PersonalLoanForm'
+import { PersonalLoanCard, type PersonalLoanGroup } from '../components/PersonalLoanCard/PersonalLoanCard'
+import { Bell, RefreshCw, CheckCircle, UserPlus, UserCheck } from 'lucide-react'
 
 export default function Dashboard() {
   const [lugares, setLugares] = useState<Lugar[]>([])
@@ -18,6 +20,7 @@ export default function Dashboard() {
   const [showForm, setShowForm] = useState(false)
   const [selectedLugarId, setSelectedLugarId] = useState<string | null>(null)
   const [showRecover, setShowRecover] = useState(false)
+  const [showPersonalForm, setShowPersonalForm] = useState(false)
   const [equiposMap, setEquiposMap] = useState<Map<string, Equipo>>(new Map())
   const [currentTime, setCurrentTime] = useState(new Date())
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default')
@@ -61,6 +64,74 @@ export default function Dashboard() {
       setNotificationPermission(permission)
     }
   }
+
+  const [actionLoading, setActionLoading] = useState<null | { id: string; type: 'toggle' | 'prestar' | 'devolver' }>(null);
+
+  const handleRefresh = async () => {
+    try {
+      const [l, p, tp] = await Promise.all([
+        getLugares(),
+        getPrestamosActivos(),
+        getTodosPrestamos(),
+      ])
+      setLugares(l)
+      setPrestamos(p)
+      setTodosPrestamos(tp)
+      const ids = Array.from(new Set(p.map((item) => item.equipo_id)))
+      if (ids.length) {
+        const map = await getEquiposByIds(ids)
+        setEquiposMap(map)
+      } else {
+        setEquiposMap(new Map())
+      }
+    } catch (err) {
+      console.error('Error refreshing dashboard:', err)
+    }
+  }
+
+  // Funciones de manejo de acciones con loading
+  const handleToggleActivo = async (lugarId: string, actualActivo: boolean) => {
+    setActionLoading({ id: lugarId, type: 'toggle' });
+    // Actualización optimista inmediata en memoria
+    setLugares((prev) =>
+      prev.map((l) => (l.id === lugarId ? { ...l, activo: !actualActivo } : l))
+    )
+    try {
+      await setEstadoLugar(lugarId, !actualActivo);
+      const freshLugares = await getLugares();
+      if (freshLugares && freshLugares.length) {
+        setLugares(freshLugares);
+      }
+    } catch (err) {
+      console.error(err);
+      // Revertir en caso de error
+      setLugares((prev) =>
+        prev.map((l) => (l.id === lugarId ? { ...l, activo: actualActivo } : l))
+      )
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handlePrestar = (lugarId: string) => {
+    setSelectedLugarId(lugarId);
+    setShowForm(true);
+  };
+
+  const handleDevolver = (lugarId: string) => {
+    setSelectedLugarId(lugarId);
+    setShowRecover(true);
+  };
+
+  const closeForm = () => {
+    setShowForm(false);
+    setSelectedLugarId(null);
+  };
+
+  const closeRecover = () => {
+    setShowRecover(false);
+    setSelectedLugarId(null);
+  };
 
   // Notificaciones para eventos de hoy
   useEffect(() => {
@@ -142,12 +213,17 @@ export default function Dashboard() {
     getEquiposByIds(ids).then(setEquiposMap)
   }, [prestamos])
 
+  const isPersonalLoan = (p: Prestamo) =>
+    p.lugar_id === '00000000-0000-0000-0000-000000000000' ||
+    Boolean(p.observaciones?.startsWith('[PERSONAL]'))
+
   // Resumen por lugar
   const resumenPorLugar = useMemo(() => {
     const map = new Map<string, { prestados: number; vencidos: number }>()
     for (const l of lugares) map.set(l.id, { prestados: 0, vencidos: 0 })
     const now = Date.now()
     for (const p of prestamos) {
+      if (isPersonalLoan(p)) continue
       const r = map.get(p.lugar_id) || { prestados: 0, vencidos: 0 }
       const isPrestado = p.estado === 'prestado'
       const due = p.fecha_devolucion ? new Date(p.fecha_devolucion).getTime() : undefined
@@ -158,6 +234,37 @@ export default function Dashboard() {
     }
     return map
   }, [lugares, prestamos])
+
+  // Préstamos directos / personales (no vinculados a un lugar de la lista)
+  const personalLoanGroups = useMemo(() => {
+    const personalLoans = prestamos.filter(
+      (p) => p.estado === 'prestado' && isPersonalLoan(p)
+    )
+
+    const groupsMap = new Map<string, PersonalLoanGroup>()
+
+    for (const p of personalLoans) {
+      const key = `${p.responsable.trim().toLowerCase()}`
+      const code = equiposMap.get(p.equipo_id)?.codigo_unico || p.equipo_id
+
+      if (!groupsMap.has(key)) {
+        groupsMap.set(key, {
+          responsable: p.responsable,
+          prestamoIds: [p.id],
+          equiposCodigos: [code],
+          fecha: p.fecha_prestamo,
+          observaciones: p.observaciones,
+        })
+      } else {
+        const g = groupsMap.get(key)!
+        g.prestamoIds.push(p.id)
+        if (!g.equiposCodigos.includes(code)) {
+          g.equiposCodigos.push(code)
+        }
+      }
+    }
+    return Array.from(groupsMap.values())
+  }, [prestamos, equiposMap])
 
   // Eventos por lugar
   const eventosPorLugar = useMemo(() => {
@@ -268,17 +375,7 @@ export default function Dashboard() {
       )}
 
       {/* Métricas Principales */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-        <div className="card bg-slate-900/90 border border-slate-800 p-4 rounded-xl flex items-center gap-3">
-          <div className="p-3 bg-cyan-500/10 text-cyan-400 rounded-lg border border-cyan-500/20">
-            <Monitor className="size-6" />
-          </div>
-          <div>
-            <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">Lugares Configurados</p>
-            <p className="text-2xl font-extrabold text-slate-100">{lugares.length}</p>
-          </div>
-        </div>
-
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
         <div className="card bg-slate-900/90 border border-slate-800 p-4 rounded-xl flex items-center gap-3">
           <div className="p-3 bg-cyan-500/10 text-cyan-400 rounded-lg border border-cyan-500/20">
             <RefreshCw className="size-6" />
@@ -302,13 +399,20 @@ export default function Dashboard() {
 
       {/* Grid de Lugares */}
       <div className="space-y-3">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-2">
           <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2">
             <span>Ubicaciones e Infraestructura</span>
             <span className="text-xs px-2 py-0.5 bg-slate-800 text-cyan-400 rounded-full border border-slate-700">
               {lugares.length}
             </span>
           </h2>
+          <button
+            onClick={() => setShowPersonalForm(true)}
+            className="btn bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 cursor-pointer shadow-md shadow-indigo-900/30 transition-all"
+          >
+            <UserPlus className="size-4" />
+            <span>Único Préstamo</span>
+          </button>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
@@ -322,38 +426,75 @@ export default function Dashboard() {
                 key={l.id}
                 nombre={l.nombre}
                 activo={l.activo}
+                loading={actionLoading?.id === l.id}
                 resumen={resumen}
                 tienePrestados={tienePrestados}
                 prestados={prestamos
                   .filter((p) => p.lugar_id === l.id && p.estado === 'prestado')
                   .map((p) => equiposMap.get(p.equipo_id)?.codigo_unico || p.equipo_id)}
                 eventoAgenda={eventoInfo}
-                onPrestar={() => {
-                  setSelectedLugarId(l.id)
-                  setShowForm(true)
-                }}
-                onDevolver={() => {
-                  setSelectedLugarId(l.id)
-                  setShowRecover(true)
-                }}
-                onToggleActivo={() => setEstadoLugar(l.id, !l.activo)}
+                disabledButtons={actionLoading?.id === l.id}
+                onToggleActivo={() => handleToggleActivo(l.id, l.activo)}
+                onPrestar={() => handlePrestar(l.id)}
+                onDevolver={() => handleDevolver(l.id)}
               />
             )
           })}
         </div>
       </div>
 
+      {/* Sección Préstamos Directos a Personal */}
+      {personalLoanGroups.length > 0 && (
+        <div className="space-y-3 pt-2">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-bold text-indigo-300 flex items-center gap-2">
+              <UserCheck className="size-5 text-indigo-400" />
+              <span>Únicos Préstamos</span>
+              <span className="text-xs px-2 py-0.5 bg-indigo-950 text-indigo-300 rounded-full border border-indigo-800">
+                {personalLoanGroups.length}
+              </span>
+            </h2>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+            {personalLoanGroups.map((g) => (
+              <PersonalLoanCard
+                key={`${g.responsable}_${g.fecha}`}
+                loanGroup={g}
+                onSuccess={handleRefresh}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Modales */}
+      {showPersonalForm && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-md card bg-slate-900 border border-slate-800 p-5 rounded-xl text-slate-100 shadow-2xl animate-in">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-2 mb-4">
+              <h3 className="font-bold text-slate-100 text-base">Registrar Único Préstamo</h3>
+              <button className="text-slate-400 hover:text-white cursor-pointer" onClick={() => setShowPersonalForm(false)}>
+                ✕
+              </button>
+            </div>
+            <PersonalLoanForm
+              onClose={() => setShowPersonalForm(false)}
+              onSuccess={handleRefresh}
+              fallbackLugarId={lugares[0]?.id}
+            />
+          </div>
+        </div>
+      )}
       {showForm && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="w-full max-w-md card bg-slate-900 border border-slate-800 p-5 rounded-xl text-slate-100 shadow-2xl animate-in">
             <div className="flex items-center justify-between border-b border-slate-800 pb-2 mb-4">
               <h3 className="font-bold text-slate-100 text-base">Registrar Préstamo de Equipo</h3>
-              <button className="text-slate-400 hover:text-white cursor-pointer" onClick={() => setShowForm(false)}>
+              <button className="text-slate-400 hover:text-white cursor-pointer" onClick={closeForm}>
                 ✕
               </button>
             </div>
-            <LoanForm lugarId={selectedLugarId ?? ''} onClose={() => setShowForm(false)} />
+            <LoanForm lugarId={selectedLugarId ?? ''} onClose={closeForm} onSuccess={handleRefresh} />
           </div>
         </div>
       )}
@@ -363,7 +504,7 @@ export default function Dashboard() {
           <div className="w-full max-w-md card bg-slate-900 border border-slate-800 p-5 rounded-xl text-slate-100 shadow-2xl animate-in">
             <div className="flex items-center justify-between border-b border-slate-800 pb-2 mb-4">
               <h3 className="font-bold text-slate-100 text-base">Recuperar / Devolver Equipos</h3>
-              <button className="text-slate-400 hover:text-white cursor-pointer" onClick={() => setShowRecover(false)}>
+              <button className="text-slate-400 hover:text-white cursor-pointer" onClick={closeRecover}>
                 ✕
               </button>
             </div>
@@ -371,7 +512,8 @@ export default function Dashboard() {
               lugarId={selectedLugarId ?? ''}
               prestamos={prestamos}
               equiposMap={equiposMap}
-              onClose={() => setShowRecover(false)}
+              onClose={closeRecover}
+              onSuccess={handleRefresh}
             />
           </div>
         </div>

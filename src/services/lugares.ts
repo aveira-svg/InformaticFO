@@ -1,6 +1,17 @@
 import { supabase } from './supabaseClient'
 import type { Lugar } from '../types/supabase'
 
+// Obtener lugares directamente
+export async function getLugares(): Promise<Lugar[]> {
+  const { data, error } = await supabase
+    .from('lugares')
+    .select('*')
+    .eq('is_deleted', false)
+    .order('nombre')
+  if (error || !data) return []
+  return data
+}
+
 // Escuchar lugares en tiempo real
 export function listenLugares(cb: (lugares: Lugar[]) => void) {
   const fetchLugares = () => {

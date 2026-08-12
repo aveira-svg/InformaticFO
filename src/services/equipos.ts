@@ -25,25 +25,34 @@ export async function ensureUniqueCodigo(codigoUnico: string): Promise<boolean> 
 
 // Crear un equipo en el catálogo
 export async function createEquipo(id: string, data: Omit<Equipo, 'id' | 'is_deleted'>): Promise<void> {
-  const { error } = await supabase
-    .from('equipos')
-    .insert([
-      {
-        id: id || undefined,
-        codigo_unico: data.codigo_unico.trim().toUpperCase(),
-        nombre: data.nombre.trim(),
-        tipo: data.tipo,
-        marca: data.marca?.trim() || null,
-        modelo: data.modelo?.trim() || null,
-        numero_serie: data.numero_serie?.trim() || null,
-        estado: data.estado || 'disponible',
-        estado_otro: data.estado_otro || null,
-        ubicacion_actual: data.ubicacion_actual || '',
-        is_deleted: false,
-      },
-    ])
+  const insertPayload: Record<string, any> = {
+    id: id || undefined,
+    codigo_unico: data.codigo_unico.trim().toUpperCase(),
+    nombre: data.nombre.trim(),
+    tipo: data.tipo,
+    marca: data.marca?.trim() || null,
+    modelo: data.modelo?.trim() || null,
+    numero_serie: data.numero_serie?.trim() || null,
+    estado: data.estado || 'disponible',
+    estado_otro: data.estado_otro || null,
+    ubicacion_actual: data.ubicacion_actual || '',
+    is_deleted: false,
+  }
+
+  if (data.personal_a_cargo) {
+    insertPayload.personal_a_cargo = data.personal_a_cargo.trim()
+  }
+
+  const { error } = await supabase.from('equipos').insert([insertPayload])
 
   if (error) {
+    // Si la columna personal_a_cargo aún no existe en Supabase (PGRST204), guardamos el equipo sin ese campo
+    if (error.code === 'PGRST204' && insertPayload.personal_a_cargo) {
+      delete insertPayload.personal_a_cargo
+      const { error: retryError } = await supabase.from('equipos').insert([insertPayload])
+      if (retryError) throw retryError
+      return
+    }
     throw error
   }
 }
@@ -100,21 +109,22 @@ export async function updateEquipoEstado(id: string, estado: Equipo['estado']): 
   }
 }
 
+// Obtener lista completa de equipos activos
+export async function getEquipos(): Promise<Equipo[]> {
+  const { data, error } = await supabase
+    .from('equipos')
+    .select('*')
+    .eq('is_deleted', false)
+    .order('created_at', { ascending: false })
+
+  if (error || !data) return []
+  return data
+}
+
 // Escuchar lista de equipos en tiempo real
 export function listenEquipos(cb: (equipos: Equipo[]) => void): () => void {
   const fetchEquipos = () => {
-    supabase
-      .from('equipos')
-      .select('*')
-      .eq('is_deleted', false)
-      .order('nombre')
-      .then(({ data, error }) => {
-        if (!error && data) {
-          cb(data)
-        } else if (error) {
-          console.error('Error fetching equipos:', error)
-        }
-      })
+    getEquipos().then(cb)
   }
 
   fetchEquipos()
@@ -138,13 +148,22 @@ export function listenEquipos(cb: (equipos: Equipo[]) => void): () => void {
 
 // Editar campos del equipo
 export async function updateEquipo(id: string, data: Partial<Omit<Equipo, 'id' | 'is_deleted' | 'created_at' | 'updated_at'>>): Promise<void> {
-  const cleanData = { ...data, updated_at: new Date().toISOString() }
+  const cleanData: Record<string, any> = { ...data, updated_at: new Date().toISOString() }
   const { error } = await supabase
     .from('equipos')
     .update(cleanData)
     .eq('id', id)
 
   if (error) {
+    if (error.code === 'PGRST204' && cleanData.personal_a_cargo) {
+      delete cleanData.personal_a_cargo
+      const { error: retryError } = await supabase
+        .from('equipos')
+        .update(cleanData)
+        .eq('id', id)
+      if (retryError) throw retryError
+      return
+    }
     throw error
   }
 }

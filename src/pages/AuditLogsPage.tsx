@@ -30,16 +30,31 @@ export default function AuditLogsPage() {
 
   useEffect(() => {
     loadLogs()
-  }, [module, dateFrom, dateTo])
+  }, [search, module, dateFrom, dateTo])
 
-  // Escuchar en tiempo real nuevos logs si no hay filtro de fechas activo
+  // Escuchar en tiempo real nuevos logs si no hay filtro de fechas activo y refrescar
   useEffect(() => {
     if (dateFrom || dateTo) return
-    const off = listenRecentLogs((recent) => {
-      setLogs(recent)
+    const off = listenRecentLogs(() => {
+      loadLogs()
     }, 100)
     return () => off()
-  }, [dateFrom, dateTo])
+  }, [dateFrom, dateTo, search, module])
+
+  const filteredLogs = React.useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return logs.filter((l) => {
+      const matchModule = !module || l.module === module
+      const matchSearch =
+        !q ||
+        l.user_short_name.toLowerCase().includes(q) ||
+        l.module.toLowerCase().includes(q) ||
+        l.action_type.toLowerCase().includes(q) ||
+        l.details.toLowerCase().includes(q) ||
+        l.id.toLowerCase().includes(q)
+      return matchModule && matchSearch
+    })
+  }, [logs, search, module])
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -94,7 +109,7 @@ export default function AuditLogsPage() {
             <input
               type="text"
               className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-9 pr-3 py-2 text-xs text-slate-100 placeholder-slate-500 outline-none focus:border-cyan-500"
-              placeholder="Buscar por usuario o detalle..."
+              placeholder="Buscar por usuario, módulo, acción o detalles..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -162,7 +177,7 @@ export default function AuditLogsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60 text-slate-300">
-              {logs.map((log) => (
+              {filteredLogs.map((log) => (
                 <tr key={log.id} className="hover:bg-slate-800/40 transition-colors">
                   <td className="px-4 py-3 font-mono text-slate-400">{new Date(log.timestamp).toLocaleString()}</td>
                   <td className="px-4 py-3 font-medium text-cyan-300">{log.user_short_name}</td>
@@ -183,7 +198,7 @@ export default function AuditLogsPage() {
                   </td>
                 </tr>
               ))}
-              {logs.length === 0 && !loading && (
+              {filteredLogs.length === 0 && !loading && (
                 <tr>
                   <td colSpan={6} className="px-4 py-8 text-center text-slate-500">
                     No se encontraron registros de auditoría con los criterios seleccionados.

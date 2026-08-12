@@ -5,10 +5,11 @@ import type { Prestamo } from '../../types/supabase'
 
 interface Props {
   onClose?: () => void
+  onSuccess?: () => void
   lugarId: string
 }
 
-export function LoanForm({ onClose, lugarId }: Props) {
+export function LoanForm({ onClose, onSuccess, lugarId }: Props) {
   const [codigos, setCodigos] = useState<string[]>([])
   const [responsable, setResponsable] = useState<string>('')
   const [observaciones, setObservaciones] = useState<string>('')
@@ -45,6 +46,7 @@ export function LoanForm({ onClose, lugarId }: Props) {
         })
       }
       setStatus('Préstamo registrado correctamente')
+      await onSuccess?.()
       onClose?.()
     } catch (err) {
       console.error(err)
@@ -78,7 +80,7 @@ export function LoanForm({ onClose, lugarId }: Props) {
       }
 
       const disponibles = eqs
-        .filter((e) => e.estado === 'disponible' && !equiposPrestados.has(e.id))
+        .filter((e) => e.estado === 'disponible' && !equiposPrestados.has(e.id) && e.historico !== true)
         .sort((a, b) => {
           const freqA = frecuenciaPorEquipo.get(a.id) || 0
           const freqB = frecuenciaPorEquipo.get(b.id) || 0

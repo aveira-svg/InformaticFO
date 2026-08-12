@@ -7,9 +7,10 @@ interface Props {
   prestamos: Prestamo[]
   equiposMap: Map<string, Equipo>
   onClose?: () => void
+  onSuccess?: () => void
 }
 
-export function RecoverForm({ lugarId, prestamos, equiposMap, onClose }: Props) {
+export function RecoverForm({ lugarId, prestamos, equiposMap, onClose, onSuccess }: Props) {
   const activos = useMemo(() => {
     return prestamos
       .filter((p) => p.lugar_id === lugarId && p.estado === 'prestado')
@@ -42,6 +43,7 @@ export function RecoverForm({ lugarId, prestamos, equiposMap, onClose }: Props) 
       for (const prestamoId of seleccion) {
         await marcarDevolucion(prestamoId)
       }
+      await onSuccess?.()
       onClose?.()
     } catch (err) {
       console.error(err)

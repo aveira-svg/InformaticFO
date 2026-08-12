@@ -1,27 +1,31 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import {
-  listenEquipos,
-  createEquipo,
-  updateEquipo,
-  deleteEquipo,
-  ensureUniqueCodigo,
-  getEquipmentHistory,
-} from '../services/equipos'
+  listenResguardos,
+  createResguardo,
+  updateResguardo,
+  deleteResguardo,
+  ensureUniqueResguardoCodigo,
+  getResguardoHistory,
+} from '../services/resguardos'
 import { listenTiposEquipo } from '../services/tiposEquipo'
-import type { Equipo, TipoEquipoDoc, EstadoEquipo } from '../types/supabase'
-import { Search, Plus, Download, History, Trash2, Edit2, Monitor } from 'lucide-react'
+import { listenProfiles } from '../services/profiles'
+import type { Resguardo, TipoEquipoDoc, EstadoResguardo, Profile } from '../types/supabase'
+import { Search, Plus, Download, History, Trash2, Edit2, ShieldCheck, UserCheck, MapPin, ShoppingCart } from 'lucide-react'
+import InventarioFaltantesTab from './InventarioFaltantesTab'
 
 export default function EquipmentPage() {
-  const [equipos, setEquipos] = useState<Equipo[]>([])
+  const [activeTab, setActiveTab] = useState<'bienes' | 'faltantes'>('bienes')
+  const [resguardos, setResguardos] = useState<Resguardo[]>([])
   const [tiposEquipo, setTiposEquipo] = useState<TipoEquipoDoc[]>([])
+  const [profiles, setProfiles] = useState<Profile[]>([])
   const [search, setSearch] = useState('')
   const [filterTipo, setFilterTipo] = useState('')
   const [filterEstado, setFilterEstado] = useState('')
 
   // Modales
   const [showAddModal, setShowAddModal] = useState(false)
-  const [editingEquipo, setEditingEquipo] = useState<Equipo | null>(null)
-  const [historyEquipo, setHistoryEquipo] = useState<{ equipo: Equipo; logs: any[] } | null>(null)
+  const [editingResguardo, setEditingResguardo] = useState<Resguardo | null>(null)
+  const [historyResguardo, setHistoryResguardo] = useState<{ resguardo: Resguardo; logs: any[] } | null>(null)
 
   // Formulario agregar / editar
   const [codigo, setCodigo] = useState('')
@@ -30,19 +34,23 @@ export default function EquipmentPage() {
   const [marca, setMarca] = useState('')
   const [modelo, setModelo] = useState('')
   const [numeroSerie, setNumeroSerie] = useState('')
-  const [estado, setEstado] = useState<EstadoEquipo>('disponible')
-  const [estadoOtro, setEstadoOtro] = useState('')
+  const [areaODestino, setAreaODestino] = useState('')
+  const [personalACargo, setPersonalACargo] = useState('')
+  const [estado, setEstado] = useState<EstadoResguardo>('asignado')
+  const [observaciones, setObservaciones] = useState('')
 
   const [checkingCode, setCheckingCode] = useState(false)
   const [isCodeUnique, setIsCodeUnique] = useState<boolean | null>(null)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    const off1 = listenEquipos(setEquipos)
+    const off1 = listenResguardos(setResguardos)
     const off2 = listenTiposEquipo(setTiposEquipo)
+    const off3 = listenProfiles(setProfiles)
     return () => {
       off1()
       off2()
+      off3()
     }
   }, [])
 
@@ -51,12 +59,12 @@ export default function EquipmentPage() {
     let active = true
     async function check() {
       const code = codigo.trim().toUpperCase()
-      if (!code || editingEquipo) {
+      if (!code || editingResguardo) {
         setIsCodeUnique(null)
         return
       }
       setCheckingCode(true)
-      const ok = await ensureUniqueCodigo(code)
+      const ok = await ensureUniqueResguardoCodigo(code)
       if (active) setIsCodeUnique(ok)
       setCheckingCode(false)
     }
@@ -64,97 +72,103 @@ export default function EquipmentPage() {
     return () => {
       active = false
     }
-  }, [codigo, editingEquipo])
+  }, [codigo, editingResguardo])
 
-  // Filtrar equipos
-  const equiposFiltrados = useMemo(() => {
-    return equipos.filter((eq) => {
+  // Filtrar resguardos contemplando todas las columnas registradas (incluyendo observaciones y detalles)
+  const resguardosFiltrados = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return resguardos.filter((r) => {
       const matchSearch =
-        !search ||
-        eq.codigo_unico.toLowerCase().includes(search.toLowerCase()) ||
-        eq.nombre.toLowerCase().includes(search.toLowerCase()) ||
-        eq.marca?.toLowerCase().includes(search.toLowerCase()) ||
-        eq.modelo?.toLowerCase().includes(search.toLowerCase())
+        !q ||
+        r.codigo_unico.toLowerCase().includes(q) ||
+        r.nombre.toLowerCase().includes(q) ||
+        r.tipo.toLowerCase().includes(q) ||
+        r.marca?.toLowerCase().includes(q) ||
+        r.modelo?.toLowerCase().includes(q) ||
+        r.numero_serie?.toLowerCase().includes(q) ||
+        r.area_o_destino?.toLowerCase().includes(q) ||
+        r.personal_a_cargo?.toLowerCase().includes(q) ||
+        r.estado.toLowerCase().includes(q) ||
+        r.observaciones?.toLowerCase().includes(q)
 
-      const matchTipo = !filterTipo || eq.tipo === filterTipo
-      const matchEstado = !filterEstado || eq.estado === filterEstado
+      const matchTipo = !filterTipo || r.tipo === filterTipo
+      const matchEstado = !filterEstado || r.estado === filterEstado
 
       return matchSearch && matchTipo && matchEstado
     })
-  }, [equipos, search, filterTipo, filterEstado])
+  }, [resguardos, search, filterTipo, filterEstado])
 
-  // Guardar nuevo equipo
+  // Guardar nuevo resguardo
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault()
     if (!codigo.trim() || !nombre.trim() || isCodeUnique === false) return
     setSaving(true)
     try {
       const id = crypto.randomUUID()
-      await createEquipo(id, {
+      await createResguardo(id, {
         codigo_unico: codigo.trim().toUpperCase(),
         nombre: nombre.trim(),
         tipo: tipo || (tiposEquipo[0]?.id ?? 'General'),
         marca: marca.trim() || undefined,
         modelo: modelo.trim() || undefined,
         numero_serie: numeroSerie.trim() || undefined,
+        area_o_destino: areaODestino.trim() || undefined,
+        personal_a_cargo: personalACargo.trim() || undefined,
         estado,
-        estado_otro: estado === 'de_baja' ? (estadoOtro.trim() || undefined) : undefined,
-        ubicacion_actual: '',
+        observaciones: observaciones.trim() || undefined,
       })
       setShowAddModal(false)
       resetForm()
     } catch (err) {
       console.error(err)
-      alert('Error al guardar el equipo')
+      alert('Error al guardar el resguardo. Recuerda crear la tabla "resguardos" en Supabase si aún no existe.')
     } finally {
       setSaving(false)
     }
   }
 
-  // Actualizar equipo
+  // Actualizar resguardo
   async function handleUpdate(e: React.FormEvent) {
     e.preventDefault()
-    if (!editingEquipo) return
+    if (!editingResguardo) return
     setSaving(true)
     try {
-      await updateEquipo(editingEquipo.id, {
+      await updateResguardo(editingResguardo.id, {
         nombre: nombre.trim(),
         tipo,
         marca: marca.trim() || undefined,
         modelo: modelo.trim() || undefined,
         numero_serie: numeroSerie.trim() || undefined,
+        area_o_destino: areaODestino.trim() || undefined,
+        personal_a_cargo: personalACargo.trim() || undefined,
         estado,
-        estado_otro: estado_otro_clean(estadoOtro),
+        observaciones: observaciones.trim() || undefined,
       })
-      setEditingEquipo(null)
+      setEditingResguardo(null)
       resetForm()
     } catch (err) {
       console.error(err)
-      alert('Error al actualizar el equipo')
+      alert('Error al actualizar el resguardo')
     } finally {
       setSaving(false)
     }
   }
 
-  function estado_otro_clean(val: string) {
-    return val ? val.trim() : undefined
-  }
-
   // Soft delete
-  async function handleDelete(eq: Equipo) {
-    if (!confirm(`¿Dar de baja lógica al equipo ${eq.codigo_unico} — ${eq.nombre}?`)) return
+  async function handleDelete(r: Resguardo) {
+    if (!confirm(`¿Dar de baja lógica al resguardo ${r.codigo_unico} — ${r.nombre}?`)) return
     try {
-      await deleteEquipo(eq.id)
+      await deleteResguardo(r.id)
     } catch (err) {
       console.error(err)
-      alert('Error al dar de baja el equipo')
+      alert('Error al dar de baja el resguardo')
     }
   }
 
   // Ver historial de trazabilidad
-  async function handleViewHistory(eq: Equipo) {
-    const logs = await getEquipmentHistory(eq.id)
-    setHistoryEquipo({ equipo: eq, logs })
+  async function handleViewHistory(r: Resguardo) {
+    const logs = await getResguardoHistory(r.id)
+    setHistoryResguardo({ resguardo: r, logs })
   }
 
   function resetForm() {
@@ -164,29 +178,34 @@ export default function EquipmentPage() {
     setMarca('')
     setModelo('')
     setNumeroSerie('')
-    setEstado('disponible')
-    setEstadoOtro('')
+    setAreaODestino('')
+    setPersonalACargo('')
+    setEstado('asignado')
+    setObservaciones('')
     setIsCodeUnique(null)
   }
 
   // Exportar a CSV
   function exportCSV() {
-    const headers = ['ID', 'Codigo Unico', 'Nombre', 'Tipo', 'Marca', 'Modelo', 'Numero Serie', 'Estado']
-    const rows = equiposFiltrados.map((e) => [
-      e.id,
-      e.codigo_unico,
-      `"${e.nombre.replace(/"/g, '""')}"`,
-      e.tipo,
-      e.marca || '',
-      e.modelo || '',
-      e.numero_serie || '',
-      e.estado,
+    const headers = ['ID', 'Codigo Unico', 'Nombre', 'Tipo', 'Marca', 'Modelo', 'Numero Serie', 'Area / Destino', 'Personal a Cargo', 'Estado', 'Observaciones']
+    const rows = resguardosFiltrados.map((r) => [
+      r.id,
+      r.codigo_unico,
+      `"${r.nombre.replace(/"/g, '""')}"`,
+      r.tipo,
+      r.marca || '',
+      r.modelo || '',
+      r.numero_serie || '',
+      `"${(r.area_o_destino || '').replace(/"/g, '""')}"`,
+      `"${(r.personal_a_cargo || '').replace(/"/g, '""')}"`,
+      r.estado,
+      `"${(r.observaciones || '').replace(/"/g, '""')}"`,
     ])
-    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\n')
+    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((row) => row.join(','))].join('\n')
     const encodedUri = encodeURI(csvContent)
     const link = document.createElement('a')
     link.setAttribute('href', encodedUri)
-    link.setAttribute('download', `equipos_inventario_${new Date().toISOString().slice(0, 10)}.csv`)
+    link.setAttribute('download', `resguardos_inventario_${new Date().toISOString().slice(0, 10)}.csv`)
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
@@ -194,35 +213,65 @@ export default function EquipmentPage() {
 
   return (
     <div className="space-y-6">
-      {/* Encabezado */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-bold text-slate-100 flex items-center gap-2">
-            <Monitor className="size-6 text-cyan-400" />
-            <span>Gestión de Equipos e Infraestructura</span>
-          </h2>
-          <p className="text-xs text-slate-400 mt-0.5">Control de catálogo informático, trazabilidad y estado físico</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={exportCSV}
-            className="btn bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-800 text-xs py-2 px-3 rounded-lg inline-flex items-center gap-1.5 cursor-pointer"
-          >
-            <Download className="size-4 text-cyan-400" />
-            <span>Exportar CSV</span>
-          </button>
-          <button
-            onClick={() => {
-              resetForm()
-              setShowAddModal(true)
-            }}
-            className="btn bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold text-xs py-2 px-3 rounded-lg inline-flex items-center gap-1.5 cursor-pointer shadow-lg shadow-cyan-500/20"
-          >
-            <Plus className="size-4" />
-            <span>Nuevo Equipo</span>
-          </button>
-        </div>
+      {/* Selector de Pestañas */}
+      <div className="flex border-b border-slate-800 gap-2">
+        <button
+          onClick={() => setActiveTab('bienes')}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-all cursor-pointer ${
+            activeTab === 'bienes'
+              ? 'border-cyan-400 text-cyan-400 bg-cyan-500/5'
+              : 'border-transparent text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <ShieldCheck className="size-4" />
+          Bienes e Inventario
+        </button>
+        <button
+          onClick={() => setActiveTab('faltantes')}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-all cursor-pointer ${
+            activeTab === 'faltantes'
+              ? 'border-violet-400 text-violet-400 bg-violet-500/5'
+              : 'border-transparent text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <ShoppingCart className="size-4" />
+          Inventario de Faltantes
+        </button>
       </div>
+
+      {activeTab === 'faltantes' ? (
+        <InventarioFaltantesTab />
+      ) : (
+        <>
+          {/* Encabezado */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-bold text-slate-100 flex items-center gap-2">
+                <ShieldCheck className="size-6 text-cyan-400" />
+                <span>Gestión de Bienes</span>
+              </h2>
+              <p className="text-xs text-slate-400 mt-0.5">Control de inventario permanente, asignaciones por área/personal y trazabilidad</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={exportCSV}
+                className="btn bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-800 text-xs py-2 px-3 rounded-lg inline-flex items-center gap-1.5 cursor-pointer"
+              >
+                <Download className="size-4 text-cyan-400" />
+                <span>Exportar CSV</span>
+              </button>
+              <button
+                onClick={() => {
+                  resetForm()
+                  setShowAddModal(true)
+                }}
+                className="btn bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold text-xs py-2 px-3 rounded-lg inline-flex items-center gap-1.5 cursor-pointer shadow-lg shadow-cyan-500/20"
+              >
+                <Plus className="size-4" />
+                <span>Nuevo Resguardo</span>
+              </button>
+            </div>
+          </div>
 
       {/* Filtros de búsqueda */}
       <div className="card bg-slate-900/90 border border-slate-800 p-4 rounded-xl shadow-xl flex flex-col md:flex-row gap-3">
@@ -231,7 +280,7 @@ export default function EquipmentPage() {
           <input
             type="text"
             className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-9 pr-3 py-2 text-xs text-slate-100 placeholder-slate-500 outline-none focus:border-cyan-500"
-            placeholder="Buscar por código, nombre, marca o modelo..."
+            placeholder="Buscar por código, nombre, marca, serie, observaciones, etc..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -256,59 +305,84 @@ export default function EquipmentPage() {
             onChange={(e) => setFilterEstado(e.target.value)}
           >
             <option value="">Todos los Estados</option>
+            <option value="asignado">Asignado</option>
             <option value="disponible">Disponible</option>
-            <option value="en_uso">En Uso</option>
-            <option value="mantenimiento">Mantenimiento</option>
+            <option value="en_reparacion">En Reparación</option>
             <option value="de_baja">De Baja</option>
           </select>
         </div>
       </div>
 
-      {/* Tabla de Equipos (PC) & Lista (Móvil) */}
+      {/* Tabla de Resguardos */}
       <div className="card bg-slate-900/90 border border-slate-800 rounded-xl overflow-hidden shadow-xl">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-950 text-slate-400 uppercase font-semibold border-b border-slate-800">
               <tr>
                 <th className="px-4 py-3">Código Único</th>
-                <th className="px-4 py-3">Nombre / Descripción</th>
+                <th className="px-4 py-3">Bien / Descripción</th>
                 <th className="px-4 py-3">Tipo</th>
-                <th className="px-4 py-3">Marca / Modelo</th>
+                <th className="px-4 py-3">Área / Destino</th>
+                <th className="px-4 py-3">Personal a Cargo</th>
                 <th className="px-4 py-3">Estado</th>
                 <th className="px-4 py-3 text-right">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60 text-slate-300">
-              {equiposFiltrados.map((eq) => (
-                <tr key={eq.id} className="hover:bg-slate-800/40 transition-colors">
-                  <td className="px-4 py-3 font-mono font-bold text-cyan-400">{eq.codigo_unico}</td>
-                  <td className="px-4 py-3 font-medium text-slate-100">{eq.nombre}</td>
+              {resguardosFiltrados.map((r) => (
+                <tr key={r.id} className="hover:bg-slate-800/40 transition-colors">
+                  <td className="px-4 py-3 font-mono font-bold text-cyan-400">{r.codigo_unico}</td>
+                  <td className="px-4 py-3 font-medium text-slate-100">
+                    <div>{r.nombre}</div>
+                    {(r.marca || r.modelo) && (
+                      <div className="text-[11px] text-slate-400 font-normal">
+                        {r.marca || ''} {r.modelo ? `(${r.modelo})` : ''}
+                      </div>
+                    )}
+                  </td>
                   <td className="px-4 py-3">
                     <span className="bg-slate-950 px-2 py-0.5 rounded border border-slate-800 text-[11px]">
-                      {eq.tipo}
+                      {r.tipo}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-slate-400">
-                    {eq.marca || '—'} {eq.modelo ? `(${eq.modelo})` : ''}
+                  <td className="px-4 py-3 text-slate-300 font-medium">
+                    {r.area_o_destino ? (
+                      <span className="inline-flex items-center gap-1 text-slate-200 bg-slate-800/40 px-2 py-0.5 rounded border border-slate-700/40">
+                        <MapPin className="size-3 text-amber-400" />
+                        {r.area_o_destino}
+                      </span>
+                    ) : (
+                      <span className="text-slate-600">—</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-slate-300 font-medium">
+                    {r.personal_a_cargo ? (
+                      <span className="inline-flex items-center gap-1 text-slate-200 bg-slate-800/60 px-2 py-0.5 rounded border border-slate-700/60">
+                        <UserCheck className="size-3 text-cyan-400" />
+                        {r.personal_a_cargo}
+                      </span>
+                    ) : (
+                      <span className="text-slate-600">—</span>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <span
                       className={`px-2 py-0.5 rounded-full font-semibold text-[10px] ${
-                        eq.estado === 'disponible'
-                          ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                          : eq.estado === 'en_uso'
+                        r.estado === 'asignado'
                           ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20'
-                          : eq.estado === 'mantenimiento'
+                          : r.estado === 'disponible'
+                          ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                          : r.estado === 'en_reparacion'
                           ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
                           : 'bg-red-500/10 text-red-400 border border-red-500/20'
                       }`}
                     >
-                      {eq.estado}
+                      {r.estado === 'en_reparacion' ? 'en reparación' : r.estado}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-right space-x-1.5">
                     <button
-                      onClick={() => handleViewHistory(eq)}
+                      onClick={() => handleViewHistory(r)}
                       className="p-1.5 hover:bg-slate-800 text-slate-400 hover:text-cyan-300 rounded cursor-pointer"
                       title="Ver Trazabilidad / Historial"
                     >
@@ -316,22 +390,24 @@ export default function EquipmentPage() {
                     </button>
                     <button
                       onClick={() => {
-                        setEditingEquipo(eq)
-                        setNombre(eq.nombre)
-                        setTipo(eq.tipo)
-                        setMarca(eq.marca || '')
-                        setModelo(eq.modelo || '')
-                        setNumeroSerie(eq.numero_serie || '')
-                        setEstado(eq.estado)
-                        setEstadoOtro(eq.estado_otro || '')
+                        setEditingResguardo(r)
+                        setNombre(r.nombre)
+                        setTipo(r.tipo)
+                        setMarca(r.marca || '')
+                        setModelo(r.modelo || '')
+                        setNumeroSerie(r.numero_serie || '')
+                        setAreaODestino(r.area_o_destino || '')
+                        setPersonalACargo(r.personal_a_cargo || '')
+                        setEstado(r.estado)
+                        setObservaciones(r.observaciones || '')
                       }}
                       className="p-1.5 hover:bg-slate-800 text-slate-400 hover:text-cyan-300 rounded cursor-pointer"
-                      title="Editar Equipo"
+                      title="Editar Resguardo"
                     >
                       <Edit2 className="size-4" />
                     </button>
                     <button
-                      onClick={() => handleDelete(eq)}
+                      onClick={() => handleDelete(r)}
                       className="p-1.5 hover:bg-red-950/60 text-slate-400 hover:text-red-400 rounded cursor-pointer"
                       title="Dar de Baja Lógica"
                     >
@@ -340,10 +416,10 @@ export default function EquipmentPage() {
                   </td>
                 </tr>
               ))}
-              {equiposFiltrados.length === 0 && (
+              {resguardosFiltrados.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-slate-500">
-                    No se encontraron equipos en el inventario.
+                  <td colSpan={7} className="px-4 py-8 text-center text-slate-500">
+                    No se encontraron resguardos en el inventario.
                   </td>
                 </tr>
               )}
@@ -352,11 +428,11 @@ export default function EquipmentPage() {
         </div>
       </div>
 
-      {/* Modal Agregar Equipo */}
+      {/* Modal Agregar Resguardo */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="w-full max-w-md card bg-slate-900 border border-slate-800 p-5 rounded-xl text-slate-100 shadow-2xl animate-in">
-            <h3 className="font-bold text-slate-100 text-base mb-4 border-b border-slate-800 pb-2">Registrar Nuevo Equipo</h3>
+            <h3 className="font-bold text-slate-100 text-base mb-4 border-b border-slate-800 pb-2">Registrar Nuevo Resguardo</h3>
             <form onSubmit={handleCreate} className="space-y-3">
               <div className="grid gap-1">
                 <label className="text-xs font-semibold text-slate-300">Código Único (Identificador)</label>
@@ -364,7 +440,7 @@ export default function EquipmentPage() {
                   required
                   type="text"
                   className="bg-slate-950 border border-slate-800 rounded px-3 py-1.5 text-xs text-cyan-300 font-mono outline-none focus:border-cyan-500"
-                  placeholder="PROY001"
+                  placeholder="RESG-001"
                   value={codigo}
                   onChange={(e) => setCodigo(e.target.value)}
                 />
@@ -374,19 +450,19 @@ export default function EquipmentPage() {
               </div>
 
               <div className="grid gap-1">
-                <label className="text-xs font-semibold text-slate-300">Nombre / Marca</label>
+                <label className="text-xs font-semibold text-slate-300">Nombre del Bien / Descripción</label>
                 <input
                   required
                   type="text"
                   className="bg-slate-950 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-100 outline-none focus:border-cyan-500"
-                  placeholder="Proyector Epson EB-S41"
+                  placeholder="Impresora HP LaserJet Pro"
                   value={nombre}
                   onChange={(e) => setNombre(e.target.value)}
                 />
               </div>
 
               <div className="grid gap-1">
-                <label className="text-xs font-semibold text-slate-300">Tipo de Equipo</label>
+                <label className="text-xs font-semibold text-slate-300">Tipo / Categoría</label>
                 <select
                   className="bg-slate-950 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-200 outline-none focus:border-cyan-500"
                   value={tipo}
@@ -406,7 +482,7 @@ export default function EquipmentPage() {
                   <input
                     type="text"
                     className="bg-slate-950 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-100 outline-none"
-                    placeholder="Epson"
+                    placeholder="HP"
                     value={marca}
                     onChange={(e) => setMarca(e.target.value)}
                   />
@@ -416,7 +492,7 @@ export default function EquipmentPage() {
                   <input
                     type="text"
                     className="bg-slate-950 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-100 outline-none"
-                    placeholder="EB-S41"
+                    placeholder="M404dn"
                     value={modelo}
                     onChange={(e) => setModelo(e.target.value)}
                   />
@@ -424,14 +500,57 @@ export default function EquipmentPage() {
               </div>
 
               <div className="grid gap-1">
-                <label className="text-xs font-semibold text-slate-300">Número de Serie (Opcional)</label>
+                <label className="text-xs font-semibold text-slate-300">Área / Destino de Asignación</label>
                 <input
                   type="text"
-                  className="bg-slate-950 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-100 outline-none"
-                  placeholder="SN-99882311"
-                  value={numeroSerie}
-                  onChange={(e) => setNumeroSerie(e.target.value)}
+                  className="bg-slate-950 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-100 outline-none placeholder-slate-500 focus:border-cyan-500"
+                  placeholder="Secretaría Académica, Laboratorio 2..."
+                  value={areaODestino}
+                  onChange={(e) => setAreaODestino(e.target.value)}
                 />
+              </div>
+
+              <div className="grid gap-1">
+                <label className="text-xs font-semibold text-slate-300">Personal a Cargo</label>
+                <div className="space-y-1">
+                  {profiles.length > 0 && (
+                    <select
+                      className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-200 outline-none mb-1"
+                      value={profiles.some((p) => p.short_name === personalACargo) ? personalACargo : ''}
+                      onChange={(e) => {
+                        if (e.target.value) setPersonalACargo(e.target.value)
+                      }}
+                    >
+                      <option value="">-- Seleccionar de usuarios --</option>
+                      {profiles.map((p) => (
+                        <option key={p.id} value={p.short_name}>
+                          {p.short_name} ({p.email})
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  <input
+                    type="text"
+                    className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-100 outline-none placeholder-slate-500 focus:border-cyan-500"
+                    placeholder="Escriba o personalice el nombre..."
+                    value={personalACargo}
+                    onChange={(e) => setPersonalACargo(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-1">
+                <label className="text-xs font-semibold text-slate-300">Estado del Resguardo</label>
+                <select
+                  className="bg-slate-950 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-200 outline-none"
+                  value={estado}
+                  onChange={(e) => setEstado(e.target.value as EstadoResguardo)}
+                >
+                  <option value="asignado">Asignado</option>
+                  <option value="disponible">Disponible</option>
+                  <option value="en_reparacion">En Reparación</option>
+                  <option value="de_baja">De Baja</option>
+                </select>
               </div>
 
               <div className="grid grid-cols-2 gap-2 pt-2">
@@ -440,7 +559,7 @@ export default function EquipmentPage() {
                   disabled={saving || isCodeUnique === false}
                   className="btn bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold py-2 rounded-lg text-xs cursor-pointer shadow-lg shadow-cyan-500/20"
                 >
-                  {saving ? 'Guardando...' : 'Guardar Equipo'}
+                  {saving ? 'Guardando...' : 'Guardar Resguardo'}
                 </button>
                 <button
                   type="button"
@@ -455,16 +574,16 @@ export default function EquipmentPage() {
         </div>
       )}
 
-      {/* Modal Editar Equipo */}
-      {editingEquipo && (
+      {/* Modal Editar Resguardo */}
+      {editingResguardo && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="w-full max-w-md card bg-slate-900 border border-slate-800 p-5 rounded-xl text-slate-100 shadow-2xl animate-in">
             <h3 className="font-bold text-slate-100 text-base mb-4 border-b border-slate-800 pb-2">
-              Editar Equipo ({editingEquipo.codigo_unico})
+              Editar Resguardo ({editingResguardo.codigo_unico})
             </h3>
             <form onSubmit={handleUpdate} className="space-y-3">
               <div className="grid gap-1">
-                <label className="text-xs font-semibold text-slate-300">Nombre / Marca</label>
+                <label className="text-xs font-semibold text-slate-300">Nombre / Bien</label>
                 <input
                   required
                   type="text"
@@ -475,7 +594,7 @@ export default function EquipmentPage() {
               </div>
 
               <div className="grid gap-1">
-                <label className="text-xs font-semibold text-slate-300">Tipo de Equipo</label>
+                <label className="text-xs font-semibold text-slate-300">Tipo de Bien</label>
                 <select
                   className="bg-slate-950 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-200 outline-none"
                   value={tipo}
@@ -490,15 +609,54 @@ export default function EquipmentPage() {
               </div>
 
               <div className="grid gap-1">
-                <label className="text-xs font-semibold text-slate-300">Estado del Equipo</label>
+                <label className="text-xs font-semibold text-slate-300">Área / Destino</label>
+                <input
+                  type="text"
+                  className="bg-slate-950 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-100 outline-none"
+                  value={areaODestino}
+                  onChange={(e) => setAreaODestino(e.target.value)}
+                />
+              </div>
+
+              <div className="grid gap-1">
+                <label className="text-xs font-semibold text-slate-300">Personal a Cargo</label>
+                <div className="space-y-1">
+                  {profiles.length > 0 && (
+                    <select
+                      className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-200 outline-none mb-1"
+                      value={profiles.some((p) => p.short_name === personalACargo) ? personalACargo : ''}
+                      onChange={(e) => {
+                        if (e.target.value) setPersonalACargo(e.target.value)
+                      }}
+                    >
+                      <option value="">-- Seleccionar de usuarios --</option>
+                      {profiles.map((p) => (
+                        <option key={p.id} value={p.short_name}>
+                          {p.short_name} ({p.email})
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  <input
+                    type="text"
+                    className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-100 outline-none placeholder-slate-500 focus:border-cyan-500"
+                    placeholder="Escriba o personalice el nombre..."
+                    value={personalACargo}
+                    onChange={(e) => setPersonalACargo(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-1">
+                <label className="text-xs font-semibold text-slate-300">Estado</label>
                 <select
                   className="bg-slate-950 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-200 outline-none"
                   value={estado}
-                  onChange={(e) => setEstado(e.target.value as EstadoEquipo)}
+                  onChange={(e) => setEstado(e.target.value as EstadoResguardo)}
                 >
+                  <option value="asignado">Asignado</option>
                   <option value="disponible">Disponible</option>
-                  <option value="en_uso">En Uso</option>
-                  <option value="mantenimiento">Mantenimiento</option>
+                  <option value="en_reparacion">En Reparación</option>
                   <option value="de_baja">De Baja</option>
                 </select>
               </div>
@@ -513,7 +671,7 @@ export default function EquipmentPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setEditingEquipo(null)}
+                  onClick={() => setEditingResguardo(null)}
                   className="btn bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 py-2 rounded-lg text-xs cursor-pointer"
                 >
                   Cancelar
@@ -525,26 +683,26 @@ export default function EquipmentPage() {
       )}
 
       {/* Modal Historial de Trazabilidad */}
-      {historyEquipo && (
+      {historyResguardo && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="w-full max-w-lg card bg-slate-900 border border-slate-800 p-5 rounded-xl text-slate-100 max-h-[85dvh] overflow-y-auto shadow-2xl animate-in">
             <div className="flex items-center justify-between border-b border-slate-800 pb-2 mb-4">
               <div>
                 <h3 className="font-bold text-cyan-400 text-base">Historial de Trazabilidad</h3>
                 <p className="text-xs text-slate-400">
-                  {historyEquipo.equipo.codigo_unico} — {historyEquipo.equipo.nombre}
+                  {historyResguardo.resguardo.codigo_unico} — {historyResguardo.resguardo.nombre}
                 </p>
               </div>
               <button
                 className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-2.5 py-1 rounded cursor-pointer"
-                onClick={() => setHistoryEquipo(null)}
+                onClick={() => setHistoryResguardo(null)}
               >
                 Cerrar
               </button>
             </div>
 
             <div className="space-y-3">
-              {historyEquipo.logs.map((log) => (
+              {historyResguardo.logs.map((log) => (
                 <div key={log.id} className="p-3 bg-slate-950 border border-slate-800 rounded-lg text-xs space-y-1">
                   <div className="flex items-center justify-between font-semibold text-slate-300">
                     <span className="uppercase text-cyan-400">{log.action_type}</span>
@@ -557,12 +715,14 @@ export default function EquipmentPage() {
                 </div>
               ))}
 
-              {historyEquipo.logs.length === 0 && (
-                <p className="text-xs text-slate-500 text-center py-6">No hay registros de movimientos previas</p>
+              {historyResguardo.logs.length === 0 && (
+                <p className="text-xs text-slate-500 text-center py-6">No hay registros de trazabilidad previos</p>
               )}
             </div>
           </div>
         </div>
+      )}
+        </>
       )}
     </div>
   )

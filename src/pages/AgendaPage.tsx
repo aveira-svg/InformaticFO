@@ -486,18 +486,41 @@ export default function AgendaPage() {
             <tbody className="divide-y divide-slate-800/60 text-slate-300">
               {eventosFiltrados.map((ev) => {
                 const lugarNom = lugaresMap.get(ev.lugar_id)?.nombre || 'Ubicación desconocida'
+                
+                // Determinar si el evento ya pasó en el tiempo
+                const now = new Date()
+                let isPast = false
+                if (ev.fecha) {
+                  const [y, m, d] = ev.fecha.split('-').map(Number)
+                  const [hFin, mFin] = (ev.hora_fin || '23:59').split(':').map(Number)
+                  const evEndDate = new Date(y, m - 1, d, hFin, mFin, 0)
+                  isPast = evEndDate < now
+                }
+
                 return (
-                  <tr key={ev.id} className="hover:bg-slate-800/40 transition-colors">
-                    <td className="px-4 py-3 font-mono font-semibold text-cyan-400">{ev.fecha}</td>
-                    <td className="px-4 py-3 font-mono text-slate-300">
+                  <tr
+                    key={ev.id}
+                    className={`transition-colors ${
+                      isPast
+                        ? 'opacity-40 bg-slate-950/40 grayscale hover:opacity-75'
+                        : 'hover:bg-slate-800/40'
+                    }`}
+                  >
+                    <td className={`px-4 py-3 font-mono font-semibold ${isPast ? 'text-slate-500 line-through' : 'text-cyan-400'}`}>
+                      {ev.fecha}
+                    </td>
+                    <td className={`px-4 py-3 font-mono ${isPast ? 'text-slate-500' : 'text-slate-300'}`}>
                       {ev.hora_inicio} - {ev.hora_fin}
                     </td>
                     <td className="px-4 py-3 font-medium text-slate-100">
-                      <span className="bg-slate-950 px-2 py-0.5 rounded border border-slate-800">
+                      <span className={`px-2 py-0.5 rounded border ${isPast ? 'bg-slate-950/80 border-slate-900 text-slate-500' : 'bg-slate-950 border-slate-800'}`}>
                         {lugarNom}
                       </span>
                     </td>
-                    <td className="px-4 py-3 font-semibold text-slate-100">{ev.titulo || 'Sin título'}</td>
+                    <td className={`px-4 py-3 font-semibold ${isPast ? 'text-slate-400 font-normal' : 'text-slate-100'}`}>
+                      {ev.titulo || 'Sin título'}
+                      {isPast && <span className="ml-2 text-[10px] bg-slate-800/60 text-slate-400 px-1.5 py-0.5 rounded border border-slate-700/50">Finalizado</span>}
+                    </td>
                     <td className="px-4 py-3 text-slate-400">{ev.responsable || '—'}</td>
                     <td className="px-4 py-3 text-right">
                       <button

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../../services/AuthContext'
 import { listenPendingTasks } from '../../services/tasks'
-import { LayoutDashboard, Monitor, Calendar, ClipboardList, FileText, Settings, LogOut, User } from 'lucide-react'
+import { LayoutDashboard, ShieldCheck, Calendar, ClipboardList, FileText, Settings, LogOut, User } from 'lucide-react'
 
 interface AppLayoutProps {
   children: React.ReactNode
@@ -24,7 +24,7 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   const navItems = [
     { label: 'Dashboard', path: '/', icon: LayoutDashboard },
-    { label: 'Equipos', path: '/equipos', icon: Monitor },
+    { label: 'Bienes', path: '/equipos', icon: ShieldCheck },
     { label: 'Agenda', path: '/agenda', icon: Calendar, adminOnly: true },
     { label: 'Tareas', path: '/tasks', icon: ClipboardList, badge: pendingCount },
     { label: 'Auditoría', path: '/audit', icon: FileText, adminOnly: true },

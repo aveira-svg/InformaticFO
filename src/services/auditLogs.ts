@@ -23,12 +23,12 @@ export async function queryAuditLogs(filters: {
   }
   if (filters.search?.trim()) {
     const val = `%${filters.search.trim()}%`
-    query = query.or(`user_short_name.ilike.${val},action_type.ilike.${val},details.ilike.${val}`)
+    query = query.or(`user_short_name.ilike.${val},module.ilike.${val},action_type.ilike.${val},details.ilike.${val}`)
   }
 
   const { data, error } = await query
     .order('timestamp', { ascending: false })
-    .limit(200) // Límite razonable para rendimiento
+    .limit(300)
 
   if (error) {
     console.error('Error fetching audit logs:', error)

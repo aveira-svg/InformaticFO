@@ -1,4 +1,4 @@
-import { Circle, TriangleAlert, Plus, RotateCcw, Calendar } from 'lucide-react'
+import { Circle, TriangleAlert, Plus, RotateCcw, Calendar, Loader2 } from 'lucide-react'
 import type { EventoAgenda } from '../../types/supabase'
 
 interface Props {
@@ -12,6 +12,8 @@ interface Props {
   onDevolver?: () => void
   onHistorial?: () => void
   onToggleActivo?: () => void
+  disabledButtons?: boolean
+  loading?: boolean
 }
 
 export function LocationCard({
@@ -24,6 +26,8 @@ export function LocationCard({
   onPrestar,
   onDevolver,
   onToggleActivo,
+  loading,
+  disabledButtons,
 }: Props) {
   const tieneEventoAlerta = eventoAgenda && (eventoAgenda.estado === 'proximo' || eventoAgenda.estado === 'vencido')
   const tieneAlertaRecuperar = !activo && tienePrestados
@@ -128,25 +132,29 @@ export function LocationCard({
 
       <div className="mt-4 grid grid-cols-3 gap-2">
         <button
-          className={`btn text-xs font-semibold py-1.5 rounded-lg cursor-pointer transition-all ${
+          className={`btn text-xs font-semibold py-1.5 rounded-lg cursor-pointer transition-all inline-flex items-center justify-center ${
             activo
               ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 hover:bg-cyan-500/30'
               : 'bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700'
           }`}
           onClick={onToggleActivo}
+          disabled={disabledButtons}
         >
+          {loading ? <Loader2 className="size-3.5 animate-spin mr-1" /> : null}
           {activo ? 'ON' : 'OFF'}
         </button>
         <button
-          className="btn bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold text-xs py-1.5 rounded-lg inline-flex items-center justify-center gap-1 cursor-pointer shadow-md shadow-cyan-500/10"
+          className="btn bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold text-xs py-1.5 rounded-lg inline-flex items-center justify-center gap-1 cursor-pointer shadow-md shadow-cyan-500/10 disabled:opacity-50 disabled:cursor-not-allowed"
           onClick={onPrestar}
+          disabled={disabledButtons}
         >
           <Plus className="size-3.5" />
           <span>Prestar</span>
         </button>
         <button
-          className="btn bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs py-1.5 rounded-lg inline-flex items-center justify-center gap-1 cursor-pointer"
+          className="btn bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 hover:bg-slate-700 text-xs py-1.5 rounded-lg inline-flex items-center justify-center gap-1 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           onClick={onDevolver}
+          disabled={disabledButtons}
         >
           <RotateCcw className="size-3.5 text-cyan-400" />
           <span>Recuperar</span>

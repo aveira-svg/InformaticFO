@@ -1,21 +1,22 @@
 import { supabase } from './supabaseClient'
 import type { TipoEquipoDoc } from '../types/supabase'
 
+// Obtener lista completa de tipos de equipo activos
+export async function getTiposEquipo(): Promise<TipoEquipoDoc[]> {
+  const { data, error } = await supabase
+    .from('tipos_equipo')
+    .select('*')
+    .eq('is_deleted', false)
+    .order('orden', { ascending: false })
+
+  if (error || !data) return []
+  return data
+}
+
 // Escuchar tipos de equipo en tiempo real
 export function listenTiposEquipo(cb: (tipos: TipoEquipoDoc[]) => void): () => void {
   const fetchTipos = () => {
-    supabase
-      .from('tipos_equipo')
-      .select('*')
-      .eq('is_deleted', false)
-      .order('orden', { ascending: true })
-      .then(({ data, error }) => {
-        if (!error && data) {
-          cb(data)
-        } else if (error) {
-          console.error('Error fetching tipos_equipo:', error)
-        }
-      })
+    getTiposEquipo().then(cb)
   }
 
   fetchTipos()
