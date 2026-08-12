@@ -40,3 +40,11 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+# Ignorar paquetes APK/ZIP generados por PWABuilder
+InformaticaFO*/
+*.apk
+*.aab
+*.appxbundle
+*.msixbundle
+*.msix
+generate_icons.cjs
