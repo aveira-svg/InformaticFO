@@ -42,7 +42,7 @@ export function Login() {
             <Monitor className="size-8" />
           </div>
           <h2 className="text-2xl font-extrabold text-slate-100 tracking-tight">Control de Préstamos</h2>
-          <p className="text-xs text-cyan-400 font-medium mt-1 uppercase tracking-wider">Facultad de Odontología — UNC</p>
+          <p className="text-xs text-cyan-400 font-medium mt-1 uppercase tracking-wider">Facultad de Odontología - UNNE</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4 relative z-10">

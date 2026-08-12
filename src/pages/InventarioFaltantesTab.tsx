@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import {
   listenArticulosBorrador,
   createArticuloBorrador,
@@ -156,7 +156,7 @@ export default function InventarioFaltantesTab() {
     td{vertical-align:top;}.footer{margin-top:24px;font-size:12px;color:#6b7280;border-top:1px solid #e5e7eb;padding-top:12px;}</style></head><body>
     <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #1e293b;padding-bottom:12px;margin-bottom:16px;">
       <div><h1 style="font-size:20px;margin:0 0 4px;">Solicitud de Compras</h1>
-      <div style="font-size:13px;color:#374151;">Facultad de Odontología — Sistema de Control de Stock</div></div>
+      <div style="font-size:13px;color:#374151;">Facultad de Odontología - UNNE — Sistema de Control de Stock</div></div>
       <div style="text-align:right;font-size:12px;color:#374151;">
         <div><strong>N Pedido:</strong> ${num}</div><div><strong>Fecha:</strong> ${fecha}</div>
         <div><strong>Solicitante:</strong> ${sol}</div>${area?`<div><strong>Area:</strong> ${area}</div>`:''}</div></div>

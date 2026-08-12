@@ -42,7 +42,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           </div>
           <div>
             <h1 className="font-bold text-sm text-slate-100 tracking-tight leading-tight">Control de Préstamos</h1>
-            <p className="text-[10px] text-cyan-400/80 font-medium">Facultad de Odontología</p>
+            <p className="text-[10px] text-cyan-400/80 font-medium">Facultad de Odontología - UNNE</p>
           </div>
         </div>
 
