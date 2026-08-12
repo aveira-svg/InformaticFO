@@ -24,12 +24,13 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   const navItems = [
     { label: 'Dashboard', path: '/', icon: LayoutDashboard },
-    { label: 'Bienes', path: '/equipos', icon: ShieldCheck },
+    { label: 'Bienes', path: '/equipos', icon: ShieldCheck, adminOnly: true },
     { label: 'Agenda', path: '/agenda', icon: Calendar, adminOnly: true },
     { label: 'Tareas', path: '/tasks', icon: ClipboardList, badge: pendingCount },
     { label: 'Auditoría', path: '/audit', icon: FileText, adminOnly: true },
-    { label: 'Configuración', path: '/config', icon: Settings },
-  ]
+    { label: 'Configuración', path: '/config', icon: Settings, adminOnly: true },
+  ].filter(item => !item.adminOnly || isAdmin)
+
 
   return (
     <div className="min-h-dvh bg-slate-950 text-slate-100 flex flex-col md:flex-row font-sans selection:bg-cyan-500 selection:text-slate-950">

@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './services/AuthContext'
 import { AppLayout } from './components/Layout/AppLayout'
@@ -9,31 +9,14 @@ import AgendaPage from './pages/AgendaPage'
 import TasksPage from './pages/TasksPage'
 import AuditLogsPage from './pages/AuditLogsPage'
 import ConfigPage from './components/Configuration/ConfigPage'
-import { promoteToAdmin } from './services/profiles'
 import { Loader2, ShieldAlert, KeyRound } from 'lucide-react'
 
 // Componente para proteger rutas que requieren Administrador
 function ProtectedAdminRoute({ children }: { children: React.ReactNode }) {
-  const { user, profile } = useAuth()
-  const [promoting, setPromoting] = useState(false)
+  const { profile } = useAuth()
 
   if (profile?.role === 'admin') {
     return <>{children}</>
-  }
-
-  const handlePromote = async () => {
-    if (!user) return
-    setPromoting(true)
-    try {
-      await promoteToAdmin(user.id)
-      alert('¡Permisos de Administrador concedidos con éxito! Recargando...')
-      window.location.reload()
-    } catch (err) {
-      console.error(err)
-      alert('Error al otorgar permisos. Revisa la consola o ejecuta la consulta SQL en Supabase.')
-    } finally {
-      setPromoting(false)
-    }
   }
 
   return (
@@ -51,20 +34,12 @@ function ProtectedAdminRoute({ children }: { children: React.ReactNode }) {
       <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 text-left space-y-2 text-xs">
         <p className="font-semibold text-slate-300 flex items-center gap-1.5">
           <KeyRound className="size-4 text-cyan-400" />
-          <span>Solución Rápida:</span>
+          <span>Información de Acceso:</span>
         </p>
         <p className="text-slate-400">
-          Haz clic abajo para convertir tu cuenta en Administrador automáticamente:
+          Solo un usuario Administrador existente puede otorgar o asignar permisos de Administrador a tu cuenta.
         </p>
       </div>
-
-      <button
-        onClick={handlePromote}
-        disabled={promoting}
-        className="w-full btn bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold py-2.5 rounded-xl text-xs cursor-pointer shadow-lg shadow-cyan-500/20"
-      >
-        {promoting ? 'Otorgando Permisos...' : 'Convertir mi Cuenta en Administrador'}
-      </button>
     </div>
   )
 }
@@ -89,7 +64,14 @@ function AppRoutes() {
     <AppLayout>
       <Routes>
         <Route path="/" element={<Dashboard />} />
-        <Route path="/equipos" element={<EquipmentPage />} />
+        <Route
+          path="/equipos"
+          element={
+            <ProtectedAdminRoute>
+              <EquipmentPage />
+            </ProtectedAdminRoute>
+          }
+        />
         <Route
           path="/agenda"
           element={
@@ -107,7 +89,14 @@ function AppRoutes() {
             </ProtectedAdminRoute>
           }
         />
-        <Route path="/config" element={<ConfigPage />} />
+        <Route
+          path="/config"
+          element={
+            <ProtectedAdminRoute>
+              <ConfigPage />
+            </ProtectedAdminRoute>
+          }
+        />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </AppLayout>
