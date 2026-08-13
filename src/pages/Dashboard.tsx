@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { listenLugares, setEstadoLugar, getLugares } from '../services/lugares'
+import { listenLugares, getLugares } from '../services/lugares'
 import { listenPrestamosActivos, listenTodosPrestamos, getPrestamosActivos, getTodosPrestamos } from '../services/prestamos'
 import { listenEventosAgenda } from '../services/eventosAgenda'
 import { getEquiposByIds } from '../services/equipos'
@@ -24,6 +24,8 @@ export default function Dashboard() {
   const [equiposMap, setEquiposMap] = useState<Map<string, Equipo>>(new Map())
   const [currentTime, setCurrentTime] = useState(new Date())
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default')
+  // Estado operativo local ON/OFF por sesión (no persiste en Supabase, no afecta visibilidad)
+  const [activoLocal, setActivoLocal] = useState<Map<string, boolean>>(new Map())
 
   useEffect(() => {
     const off1 = listenLugares(setLugares)
@@ -65,7 +67,7 @@ export default function Dashboard() {
     }
   }
 
-  const [actionLoading, setActionLoading] = useState<null | { id: string; type: 'toggle' | 'prestar' | 'devolver' }>(null);
+
 
   const handleRefresh = async () => {
     try {
@@ -89,28 +91,13 @@ export default function Dashboard() {
     }
   }
 
-  // Funciones de manejo de acciones con loading
-  const handleToggleActivo = async (lugarId: string, actualActivo: boolean) => {
-    setActionLoading({ id: lugarId, type: 'toggle' });
-    // Actualización optimista inmediata en memoria
-    setLugares((prev) =>
-      prev.map((l) => (l.id === lugarId ? { ...l, activo: !actualActivo } : l))
-    )
-    try {
-      await setEstadoLugar(lugarId, !actualActivo);
-      const freshLugares = await getLugares();
-      if (freshLugares && freshLugares.length) {
-        setLugares(freshLugares);
-      }
-    } catch (err) {
-      console.error(err);
-      // Revertir en caso de error
-      setLugares((prev) =>
-        prev.map((l) => (l.id === lugarId ? { ...l, activo: actualActivo } : l))
-      )
-    } finally {
-      setActionLoading(null);
-    }
+  // Toggle ON/OFF local por sesión — NO persiste en Supabase, NO afecta la visibilidad de la tarjeta
+  const handleToggleActivo = (lugarId: string, currentActivo: boolean) => {
+    setActivoLocal((prev) => {
+      const next = new Map(prev)
+      next.set(lugarId, !currentActivo)
+      return next
+    })
   };
 
   const handlePrestar = (lugarId: string) => {
@@ -318,7 +305,8 @@ export default function Dashboard() {
     return map
   }, [lugares, eventosAgenda, currentTime])
 
-  // Ordenar lugares (solo los marcados como visibles)
+  // Ordenar lugares visibles (activo=true según Configuración → botón "Visible")
+  // El toggle ON/OFF de la tarjeta es local y NO filtra aquí
   const lugaresFiltrados = useMemo(() => {
     const visibles = lugares.filter((l) => l.activo)
     const frecuenciaPorLugar = new Map<string, number>()
@@ -418,21 +406,23 @@ export default function Dashboard() {
             const resumen = resumenPorLugar.get(l.id) || { prestados: 0, vencidos: 0 }
             const tienePrestados = resumen.prestados > 0
             const eventoInfo = eventosPorLugar.get(l.id)
+            // Estado operativo ON/OFF local: si no fue tocado en esta sesión, comienza en true (activo)
+            const estaActivo = activoLocal.has(l.id) ? activoLocal.get(l.id)! : true
 
             return (
               <LocationCard
                 key={l.id}
                 nombre={l.nombre}
-                activo={l.activo}
-                loading={actionLoading?.id === l.id}
+                activo={estaActivo}
+                loading={false}
                 resumen={resumen}
                 tienePrestados={tienePrestados}
                 prestados={prestamos
                   .filter((p) => p.lugar_id === l.id && p.estado === 'prestado')
                   .map((p) => equiposMap.get(p.equipo_id)?.codigo_unico || p.equipo_id)}
                 eventoAgenda={eventoInfo}
-                disabledButtons={actionLoading?.id === l.id}
-                onToggleActivo={() => handleToggleActivo(l.id, l.activo)}
+                disabledButtons={false}
+                onToggleActivo={() => handleToggleActivo(l.id, estaActivo)}
                 onPrestar={() => handlePrestar(l.id)}
                 onDevolver={() => handleDevolver(l.id)}
               />
