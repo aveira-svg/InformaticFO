@@ -7,7 +7,6 @@ export function listenPendingTasks(cb: (tasks: any[]) => void) {
       .from('tasks')
       .select(`
         *,
-        lugar:lugares(id, nombre),
         assignments:task_assignments(user_id),
         creator:profiles!tasks_created_by_fkey(short_name)
       `)
@@ -44,7 +43,6 @@ export function listenCompletedTasks(cb: (tasks: any[]) => void) {
       .from('tasks')
       .select(`
         *,
-        lugar:lugares(id, nombre),
         assignments:task_assignments(user_id),
         creator:profiles!tasks_created_by_fkey(short_name)
       `)
@@ -81,20 +79,40 @@ export async function createTask(
   assignedUserIds: string[],
   createdById: string
 ) {
-  const { data: task, error: taskError } = await supabase
+  const payload: Record<string, any> = {
+    description: subtitle.trim(),
+    subtitle: subtitle.trim(),
+    status: 'pendiente',
+    created_by: createdById,
+    is_deleted: false,
+  }
+  if (lugarId) {
+    payload.lugar_id = lugarId
+  }
+
+  let { data: task, error: taskError } = await supabase
     .from('tasks')
-    .insert([
-      {
-        lugar_id: lugarId || null,
-        subtitle: subtitle.trim(),
-        description: subtitle.trim(),
-        status: 'pendiente',
-        created_by: createdById,
-        is_deleted: false,
-      },
-    ])
+    .insert([payload])
     .select('id')
     .single()
+
+  // Fallback si la columna lugar_id o subtitle aún no existe en el esquema de la BD remota (PGRST204)
+  if (taskError && (taskError.code === 'PGRST204' || taskError.message?.includes("schema cache"))) {
+    console.warn('Columnas nuevas no encontradas en la BD remota. Ejecutando fallback...', taskError)
+    const fallbackPayload = {
+      description: subtitle.trim(),
+      status: 'pendiente',
+      created_by: createdById,
+      is_deleted: false,
+    }
+    const res = await supabase
+      .from('tasks')
+      .insert([fallbackPayload])
+      .select('id')
+      .single()
+    task = res.data
+    taskError = res.error
+  }
 
   if (taskError || !task) {
     throw taskError || new Error('No se pudo crear la tarea')
