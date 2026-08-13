@@ -113,7 +113,11 @@ export interface EventoAgenda {
 
 export interface Task {
   id: string
+  title?: string
+  subtitle?: string
   description: string
+  lugar_id?: string
+  lugar?: { id: string; nombre: string }
   status: 'pendiente' | 'completada'
   created_by: string
   created_at: string

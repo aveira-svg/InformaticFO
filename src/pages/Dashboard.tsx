@@ -318,14 +318,15 @@ export default function Dashboard() {
     return map
   }, [lugares, eventosAgenda, currentTime])
 
-  // Ordenar lugares
+  // Ordenar lugares (solo los marcados como visibles)
   const lugaresFiltrados = useMemo(() => {
+    const visibles = lugares.filter((l) => l.activo)
     const frecuenciaPorLugar = new Map<string, number>()
     for (const p of todosPrestamos) {
       frecuenciaPorLugar.set(p.lugar_id, (frecuenciaPorLugar.get(p.lugar_id) || 0) + 1)
     }
 
-    return [...lugares].sort((a, b) => {
+    return [...visibles].sort((a, b) => {
       const eventoA = eventosPorLugar.get(a.id)
       const eventoB = eventosPorLugar.get(b.id)
       const tieneAlertaA = eventoA && (eventoA.estado === 'proximo' || eventoA.estado === 'vencido')
@@ -339,9 +340,6 @@ export default function Dashboard() {
 
       if (tienePrestadosA && !tienePrestadosB) return -1
       if (!tienePrestadosA && tienePrestadosB) return 1
-
-      if (a.activo && !b.activo) return -1
-      if (!a.activo && b.activo) return 1
 
       const freqA = frecuenciaPorLugar.get(a.id) || 0
       const freqB = frecuenciaPorLugar.get(b.id) || 0
@@ -391,8 +389,8 @@ export default function Dashboard() {
             <CheckCircle className="size-6" />
           </div>
           <div>
-            <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">Lugares Activos (ON)</p>
-            <p className="text-2xl font-extrabold text-emerald-400">{lugares.filter((l) => l.activo).length}</p>
+            <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">Lugares Visibles</p>
+            <p className="text-2xl font-extrabold text-emerald-400">{lugaresFiltrados.length}</p>
           </div>
         </div>
       </div>
@@ -401,9 +399,9 @@ export default function Dashboard() {
       <div className="space-y-3">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2">
-            <span>Ubicaciones e Infraestructura</span>
+            <span>Ubicaciones e Infraestructura Visibles</span>
             <span className="text-xs px-2 py-0.5 bg-slate-800 text-cyan-400 rounded-full border border-slate-700">
-              {lugares.length}
+              {lugaresFiltrados.length}
             </span>
           </h2>
           <button

@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react'
-import { addLugar, listenLugares, getLugares, updateLugar } from '../../services/lugares'
+import { addLugar, listenLugares, getLugares, updateLugar, setEstadoLugar } from '../../services/lugares'
 import { ensureUniqueCodigo, createEquipo, listenEquipos, deleteEquipo, getEquipos, updateEquipo } from '../../services/equipos'
 import { listenTiposEquipo, createTipoEquipo, getTiposEquipo, updateTipoEquipo } from '../../services/tiposEquipo'
 import { listenProfiles, deleteProfile, adminCreateUser, updateProfile, getProfiles } from '../../services/profiles'
 import { fetchAllDeletedRecords, restoreRecord, type DeletedRecord } from '../../services/recycleBin'
 import { useAuth } from '../../services/AuthContext'
 import type { Lugar, Equipo, TipoEquipoDoc, EstadoEquipo, Profile } from '../../types/supabase'
-import { MapPin, Monitor, Layers, Users, Trash2, RefreshCcw, Pencil, X, Check } from 'lucide-react'
+import { MapPin, Monitor, Layers, Users, Trash2, RefreshCcw, Pencil, X, Check, Eye, EyeOff } from 'lucide-react'
 
 type TabType = 'lugares' | 'equipos' | 'tipos' | 'usuarios' | 'papelera'
 
@@ -450,13 +450,28 @@ export default function ConfigPage() {
                         {l.descripcion && <p className="text-[11px] text-slate-500">{l.descripcion}</p>}
                       </div>
                       <div className="flex items-center gap-2">
-                        <span
-                          className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
-                            l.activo ? 'bg-emerald-500/10 text-emerald-400' : 'bg-slate-800 text-slate-500'
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              await setEstadoLugar(l.id, !l.activo)
+                              const fresh = await getLugares()
+                              setLugares(fresh)
+                            } catch (err) {
+                              console.error(err)
+                              alert('Error al cambiar visibilidad del lugar')
+                            }
+                          }}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer border ${
+                            l.activo
+                              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
+                              : 'bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700'
                           }`}
+                          title={l.activo ? 'Lugar visible en Dashboard y Agenda. Clic para ocultar.' : 'Lugar oculto en Dashboard y Agenda. Clic para hacer visible.'}
                         >
-                          {l.activo ? 'Activo' : 'Inactivo'}
-                        </span>
+                          {l.activo ? <Eye className="size-3.5" /> : <EyeOff className="size-3.5" />}
+                          <span>Visible</span>
+                        </button>
                         <button
                           onClick={() => {
                             setEditingLugar(l)
@@ -464,7 +479,7 @@ export default function ConfigPage() {
                             setEditDescLugar(l.descripcion || '')
                           }}
                           title="Editar lugar"
-                          className="text-slate-400 hover:text-cyan-300 p-1 rounded hover:bg-slate-900"
+                          className="text-slate-400 hover:text-cyan-300 p-1 rounded hover:bg-slate-900 cursor-pointer"
                         >
                           <Pencil className="size-4" />
                         </button>

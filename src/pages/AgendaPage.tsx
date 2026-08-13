@@ -49,11 +49,13 @@ export default function AgendaPage() {
     }
   }, [])
 
+  const lugaresVisibles = useMemo(() => lugares.filter((l) => l.activo), [lugares])
+
   useEffect(() => {
-    if (lugares.length > 0 && !lugarId) {
-      setLugarId(lugares[0].id)
+    if (lugaresVisibles.length > 0 && !lugarId) {
+      setLugarId(lugaresVisibles[0].id)
     }
-  }, [lugares, lugarId])
+  }, [lugaresVisibles, lugarId])
 
   const lugaresMap = useMemo(() => {
     const m = new Map<string, Lugar>()
@@ -324,7 +326,7 @@ export default function AgendaPage() {
               onChange={(e) => setFilterLugar(e.target.value)}
             >
               <option value="">Todos los Lugares</option>
-              {lugares.map((l) => (
+              {lugaresVisibles.map((l) => (
                 <option key={l.id} value={l.id}>
                   {l.nombre}
                 </option>
@@ -392,7 +394,7 @@ export default function AgendaPage() {
                   value={lugarId}
                   onChange={(e) => setLugarId(e.target.value)}
                 >
-                  {lugares.map((l) => (
+                  {lugaresVisibles.map((l) => (
                     <option key={l.id} value={l.id}>
                       {l.nombre}
                     </option>

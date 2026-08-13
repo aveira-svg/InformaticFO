@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../services/AuthContext'
 import { listenProfiles } from '../services/profiles'
+import { listenLugares } from '../services/lugares'
 import {
   createTask,
   deleteTask,
@@ -10,17 +11,19 @@ import {
   listenCompletedTasks,
   listenTaskUpdates,
 } from '../services/tasks'
-import type { Profile } from '../types/supabase'
-import { Calendar, CheckCircle2, MessageSquare, Plus, Trash2, User, AlertTriangle, ClipboardList } from 'lucide-react'
+import type { Profile, Lugar } from '../types/supabase'
+import { Calendar, CheckCircle2, MessageSquare, Plus, Trash2, User, AlertTriangle, ClipboardList, MapPin } from 'lucide-react'
 
 export default function TasksPage() {
   const { profile } = useAuth()
   const [profiles, setProfiles] = useState<Profile[]>([])
+  const [lugares, setLugares] = useState<Lugar[]>([])
   const [pendingTasks, setPendingTasks] = useState<any[]>([])
   const [completedTasks, setCompletedTasks] = useState<any[]>([])
 
   // Modal agregar tarea
   const [showAddForm, setShowAddForm] = useState(false)
+  const [selectedLugarId, setSelectedLugarId] = useState('')
   const [newDescription, setNewDescription] = useState('')
   const [selectedUsers, setSelectedUsers] = useState<string[]>([])
   const [creating, setCreating] = useState(false)
@@ -39,10 +42,12 @@ export default function TasksPage() {
 
   useEffect(() => {
     const offProfiles = listenProfiles(setProfiles)
+    const offLugares = listenLugares(setLugares)
     const offPending = listenPendingTasks(setPendingTasks)
     const offCompleted = listenCompletedTasks(setCompletedTasks)
     return () => {
       offProfiles()
+      offLugares()
       offPending()
       offCompleted()
     }
@@ -64,6 +69,12 @@ export default function TasksPage() {
     return m
   }, [profiles])
 
+  const lugaresMap = useMemo(() => {
+    const m = new Map<string, Lugar>()
+    lugares.forEach((l) => m.set(l.id, l))
+    return m
+  }, [lugares])
+
   const esTareaVieja = (createdAtStr: string) => {
     const createdDate = new Date(createdAtStr)
     const diffTime = Math.abs(Date.now() - createdDate.getTime())
@@ -76,8 +87,9 @@ export default function TasksPage() {
     if (!newDescription.trim() || !profile) return
     setCreating(true)
     try {
-      await createTask(newDescription, selectedUsers, profile.id)
+      await createTask(selectedLugarId || null, newDescription, selectedUsers, profile.id)
       setNewDescription('')
+      setSelectedLugarId('')
       setSelectedUsers([])
       setShowAddForm(false)
     } catch (err) {
@@ -129,7 +141,6 @@ export default function TasksPage() {
 
   return (
     <div className="space-y-6">
-      {/* Encabezado */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold text-slate-100 flex items-center gap-2">
@@ -147,7 +158,6 @@ export default function TasksPage() {
         </button>
       </div>
 
-      {/* Tareas Pendientes */}
       <div className="space-y-3">
         <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2">
           <span>Tareas Activas</span>
@@ -167,6 +177,8 @@ export default function TasksPage() {
             {pendingTasks.map((task) => {
               const esVieja = esTareaVieja(task.created_at)
               const userNames = task.assignments?.map((a: any) => profilesMap.get(a.user_id)?.short_name || 'Desconocido') || []
+              const lugarNombre = task.lugar?.nombre || lugaresMap.get(task.lugar_id)?.nombre || task.title || 'Ubicación General'
+              const detalleText = task.subtitle || task.description
 
               return (
                 <div
@@ -184,15 +196,24 @@ export default function TasksPage() {
                     </div>
                   )}
 
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-1.5 text-[11px] text-slate-400 font-mono">
-                      <Calendar className="size-3 text-cyan-400" />
-                      <span>{new Date(task.created_at).toLocaleDateString()}</span>
+                  <div className="space-y-2.5">
+                    <div className="flex items-center justify-between border-b border-slate-800/60 pb-1.5 text-[11px] text-slate-400 font-mono">
+                      <div className="flex items-center gap-1.5">
+                        <Calendar className="size-3 text-cyan-400" />
+                        <span>{new Date(task.created_at).toLocaleDateString()}</span>
+                      </div>
                     </div>
 
-                    <p className="text-slate-100 font-medium text-xs sm:text-sm break-words pr-12 leading-relaxed">
-                      {task.description}
-                    </p>
+                    <div className="flex items-center gap-1.5 text-slate-100 font-bold text-sm text-cyan-300">
+                      <MapPin className="size-4 text-cyan-400 shrink-0" />
+                      <span className="truncate">{lugarNombre}</span>
+                    </div>
+
+                    {detalleText && (
+                      <p className="text-slate-300 font-medium text-xs break-words leading-relaxed bg-slate-950/60 p-2.5 rounded-lg border border-slate-800/80">
+                        {detalleText}
+                      </p>
+                    )}
 
                     <div className="flex items-center gap-1.5 flex-wrap pt-1">
                       <span className="text-[11px] text-slate-400">Asignado:</span>
@@ -214,7 +235,6 @@ export default function TasksPage() {
                     </div>
                   </div>
 
-                  {/* Acciones y comentarios */}
                   <div className="mt-4 pt-3 border-t border-slate-800 flex flex-col gap-2">
                     <button
                       className="text-xs font-semibold text-cyan-400 hover:text-cyan-300 inline-flex items-center gap-1 text-left cursor-pointer"
@@ -285,7 +305,6 @@ export default function TasksPage() {
         )}
       </div>
 
-      {/* Historial de Tareas Completadas (PC & Mobile) */}
       <div className="border-t border-slate-800 pt-6">
         <h3 className="text-sm font-bold text-slate-200 mb-3">Historial de Tareas Resueltas</h3>
         {completedTasks.length === 0 ? (
@@ -298,7 +317,8 @@ export default function TasksPage() {
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-950 text-slate-400 uppercase font-semibold border-b border-slate-800">
                   <tr>
-                    <th className="px-4 py-3">Descripción</th>
+                    <th className="px-4 py-3">Lugar / Título</th>
+                    <th className="px-4 py-3">Detalle / Subtítulo</th>
                     <th className="px-4 py-3">Fecha Inicio</th>
                     <th className="px-4 py-3">Fecha Fin</th>
                     <th className="px-4 py-3">Asignados</th>
@@ -307,13 +327,16 @@ export default function TasksPage() {
                 <tbody className="divide-y divide-slate-800/60 text-slate-300">
                   {completedTasks.map((task) => {
                     const userNames = task.assignments?.map((a: any) => profilesMap.get(a.user_id)?.short_name || 'Desconocido') || []
+                    const lugarNombre = task.lugar?.nombre || lugaresMap.get(task.lugar_id)?.nombre || task.title || 'Ubicación General'
+                    const detalleText = task.subtitle || task.description
                     return (
                       <tr
                         key={task.id}
                         onClick={() => setViewHistoryTask(task)}
                         className="hover:bg-slate-800/40 cursor-pointer transition-colors"
                       >
-                        <td className="px-4 py-3 font-medium text-slate-100 truncate max-w-xs">{task.description}</td>
+                        <td className="px-4 py-3 font-semibold text-cyan-300 truncate max-w-xs">{lugarNombre}</td>
+                        <td className="px-4 py-3 text-slate-200 truncate max-w-xs">{detalleText}</td>
                         <td className="px-4 py-3 text-slate-400">{new Date(task.created_at).toLocaleDateString()}</td>
                         <td className="px-4 py-3 text-emerald-400">
                           {task.completed_at ? new Date(task.completed_at).toLocaleDateString() : '—'}
@@ -337,20 +360,41 @@ export default function TasksPage() {
         )}
       </div>
 
-      {/* Modal Agregar Tarea */}
       {showAddForm && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-md card bg-slate-900 border border-slate-800 p-5 rounded-xl text-slate-100 shadow-2xl animate-in space-y-4">
-            <h3 className="font-bold text-slate-100 text-base border-b border-slate-800 pb-2">Agregar Nueva Tarea</h3>
-            <form onSubmit={handleCreateTask} className="space-y-4">
+          <div className="w-full max-w-md card bg-slate-900 border border-slate-800 p-5 rounded-xl text-slate-100 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+              <h3 className="font-bold text-slate-100 text-base">Registrar Nueva Tarea</h3>
+              <button className="text-slate-400 hover:text-white cursor-pointer" onClick={() => setShowAddForm(false)}>
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateTask} className="space-y-3">
               <div className="grid gap-1">
-                <label className="text-xs font-semibold text-slate-300">Descripción de la Tarea</label>
+                <label className="text-xs font-semibold text-slate-300">Lugar / Ubicación de la Tarea</label>
+                <select
+                  className="bg-slate-950 border border-slate-800 rounded px-3 py-2 text-xs text-slate-200 focus:border-cyan-500 outline-none cursor-pointer"
+                  value={selectedLugarId}
+                  onChange={(e) => setSelectedLugarId(e.target.value)}
+                >
+                  <option value="">-- Seleccionar Lugar (Lista Total) --</option>
+                  {lugares.map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.nombre} {!l.activo ? '(No visible)' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid gap-1">
+                <label className="text-xs font-semibold text-slate-300">Detalle / Subtítulo de Tarea <span className="text-red-400">*</span></label>
                 <textarea
                   required
                   className="bg-slate-950 border border-slate-800 rounded px-3 py-2 text-xs text-slate-100 focus:border-cyan-500 outline-none"
                   value={newDescription}
                   onChange={(e) => setNewDescription(e.target.value)}
-                  placeholder="Ej: Limpieza de ventiladores Aula C, reemplazar cable VGA..."
+                  placeholder="Ej: Limpieza de ventiladores, reemplazar cable VGA, ajustar proyector..."
                   rows={3}
                 />
               </div>
@@ -400,7 +444,6 @@ export default function TasksPage() {
         </div>
       )}
 
-      {/* Modal Completar Tarea */}
       {completingTaskId && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="w-full max-w-sm card bg-slate-900 border border-slate-800 p-5 rounded-xl text-slate-100 shadow-2xl animate-in space-y-4">
@@ -456,9 +499,17 @@ export default function TasksPage() {
 
             <div className="space-y-3 text-xs text-slate-300">
               <div>
-                <span className="text-slate-400 font-semibold">Descripción:</span>
+                <span className="text-slate-400 font-semibold">Lugar / Ubicación:</span>
+                <p className="mt-1 p-2.5 bg-slate-950 rounded text-cyan-300 font-bold border border-slate-800 flex items-center gap-1.5">
+                  <MapPin className="size-4 text-cyan-400" />
+                  <span>{viewHistoryTask.lugar?.nombre || lugaresMap.get(viewHistoryTask.lugar_id)?.nombre || viewHistoryTask.title || 'Ubicación General'}</span>
+                </p>
+              </div>
+
+              <div>
+                <span className="text-slate-400 font-semibold">Detalle / Subtítulo:</span>
                 <p className="mt-1 p-2.5 bg-slate-950 rounded text-slate-100 font-medium border border-slate-800">
-                  {viewHistoryTask.description}
+                  {viewHistoryTask.subtitle || viewHistoryTask.description}
                 </p>
               </div>
 

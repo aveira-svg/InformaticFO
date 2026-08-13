@@ -89,6 +89,9 @@ CREATE TABLE IF NOT EXISTS public.eventos_agenda (
 -- 7. TABLA: tasks (Tareas pendientes/completadas)
 CREATE TABLE IF NOT EXISTS public.tasks (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    lugar_id UUID REFERENCES public.lugares(id) ON DELETE SET NULL,
+    title TEXT,
+    subtitle TEXT,
     description TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'pendiente' CHECK (status IN ('pendiente', 'completada')),
     created_by UUID REFERENCES public.profiles(id),

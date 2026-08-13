@@ -7,6 +7,7 @@ export function listenPendingTasks(cb: (tasks: any[]) => void) {
       .from('tasks')
       .select(`
         *,
+        lugar:lugares(id, nombre),
         assignments:task_assignments(user_id),
         creator:profiles!tasks_created_by_fkey(short_name)
       `)
@@ -43,6 +44,7 @@ export function listenCompletedTasks(cb: (tasks: any[]) => void) {
       .from('tasks')
       .select(`
         *,
+        lugar:lugares(id, nombre),
         assignments:task_assignments(user_id),
         creator:profiles!tasks_created_by_fkey(short_name)
       `)
@@ -73,12 +75,19 @@ export function listenCompletedTasks(cb: (tasks: any[]) => void) {
 }
 
 // Crear una tarea
-export async function createTask(description: string, assignedUserIds: string[], createdById: string) {
+export async function createTask(
+  lugarId: string | null,
+  subtitle: string,
+  assignedUserIds: string[],
+  createdById: string
+) {
   const { data: task, error: taskError } = await supabase
     .from('tasks')
     .insert([
       {
-        description: description.trim(),
+        lugar_id: lugarId || null,
+        subtitle: subtitle.trim(),
+        description: subtitle.trim(),
         status: 'pendiente',
         created_by: createdById,
         is_deleted: false,

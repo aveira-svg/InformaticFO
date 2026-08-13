@@ -9,7 +9,8 @@ import {
 } from '../services/resguardos'
 import { listenTiposEquipo } from '../services/tiposEquipo'
 import { listenProfiles } from '../services/profiles'
-import type { Resguardo, TipoEquipoDoc, EstadoResguardo, Profile } from '../types/supabase'
+import { listenLugares } from '../services/lugares'
+import type { Resguardo, TipoEquipoDoc, EstadoResguardo, Profile, Lugar } from '../types/supabase'
 import { Search, Plus, Download, History, Trash2, Edit2, ShieldCheck, UserCheck, MapPin, ShoppingCart } from 'lucide-react'
 import InventarioFaltantesTab from './InventarioFaltantesTab'
 
@@ -18,6 +19,7 @@ export default function EquipmentPage() {
   const [resguardos, setResguardos] = useState<Resguardo[]>([])
   const [tiposEquipo, setTiposEquipo] = useState<TipoEquipoDoc[]>([])
   const [profiles, setProfiles] = useState<Profile[]>([])
+  const [lugares, setLugares] = useState<Lugar[]>([])
   const [search, setSearch] = useState('')
   const [filterTipo, setFilterTipo] = useState('')
   const [filterEstado, setFilterEstado] = useState('')
@@ -47,10 +49,12 @@ export default function EquipmentPage() {
     const off1 = listenResguardos(setResguardos)
     const off2 = listenTiposEquipo(setTiposEquipo)
     const off3 = listenProfiles(setProfiles)
+    const off4 = listenLugares(setLugares)
     return () => {
       off1()
       off2()
       off3()
+      off4()
     }
   }, [])
 
@@ -501,13 +505,31 @@ export default function EquipmentPage() {
 
               <div className="grid gap-1">
                 <label className="text-xs font-semibold text-slate-300">Área / Destino de Asignación</label>
-                <input
-                  type="text"
-                  className="bg-slate-950 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-100 outline-none placeholder-slate-500 focus:border-cyan-500"
-                  placeholder="Secretaría Académica, Laboratorio 2..."
-                  value={areaODestino}
-                  onChange={(e) => setAreaODestino(e.target.value)}
-                />
+                <div className="space-y-1">
+                  {lugares.length > 0 && (
+                    <select
+                      className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-200 outline-none mb-1"
+                      value={lugares.some((l) => l.nombre === areaODestino) ? areaODestino : ''}
+                      onChange={(e) => {
+                        if (e.target.value) setAreaODestino(e.target.value)
+                      }}
+                    >
+                      <option value="">-- Seleccionar de lugares registrados --</option>
+                      {lugares.map((l) => (
+                        <option key={l.id} value={l.nombre}>
+                          {l.nombre} {!l.activo ? '(No visible)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  <input
+                    type="text"
+                    className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-100 outline-none placeholder-slate-500 focus:border-cyan-500"
+                    placeholder="Secretaría Académica, Laboratorio 2..."
+                    value={areaODestino}
+                    onChange={(e) => setAreaODestino(e.target.value)}
+                  />
+                </div>
               </div>
 
               <div className="grid gap-1">
@@ -610,12 +632,30 @@ export default function EquipmentPage() {
 
               <div className="grid gap-1">
                 <label className="text-xs font-semibold text-slate-300">Área / Destino</label>
-                <input
-                  type="text"
-                  className="bg-slate-950 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-100 outline-none"
-                  value={areaODestino}
-                  onChange={(e) => setAreaODestino(e.target.value)}
-                />
+                <div className="space-y-1">
+                  {lugares.length > 0 && (
+                    <select
+                      className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-200 outline-none mb-1"
+                      value={lugares.some((l) => l.nombre === areaODestino) ? areaODestino : ''}
+                      onChange={(e) => {
+                        if (e.target.value) setAreaODestino(e.target.value)
+                      }}
+                    >
+                      <option value="">-- Seleccionar de lugares registrados --</option>
+                      {lugares.map((l) => (
+                        <option key={l.id} value={l.nombre}>
+                          {l.nombre} {!l.activo ? '(No visible)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  <input
+                    type="text"
+                    className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-100 outline-none"
+                    value={areaODestino}
+                    onChange={(e) => setAreaODestino(e.target.value)}
+                  />
+                </div>
               </div>
 
               <div className="grid gap-1">
