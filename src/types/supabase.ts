@@ -12,7 +12,8 @@ export interface Lugar {
   id: string
   nombre: string
   descripcion?: string
-  activo: boolean
+  activo: boolean       // Visibilidad en Dashboard (controlado desde Configuración)
+  disponible: boolean   // Estado operativo ON/OFF (controlado desde la tarjeta del Dashboard)
   is_deleted: boolean
   created_at?: string
   updated_at?: string

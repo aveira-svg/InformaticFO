@@ -57,6 +57,7 @@ export async function addLugar(nombre: string, descripcion?: string) {
         nombre: nombre.trim(),
         descripcion: descripcion?.trim() || '',
         activo: true,
+        disponible: true,
         is_deleted: false,
       },
     ])
@@ -65,11 +66,22 @@ export async function addLugar(nombre: string, descripcion?: string) {
   }
 }
 
-// Alternar estado activo/inactivo (ON/OFF)
+// Alternar estado activo/inactivo (visibilidad en Dashboard desde Configuración)
 export async function setEstadoLugar(lugarId: string, activo: boolean) {
   const { error } = await supabase
     .from('lugares')
     .update({ activo, updated_at: new Date().toISOString() })
+    .eq('id', lugarId)
+  if (error) {
+    throw error
+  }
+}
+
+// Alternar disponibilidad operativa ON/OFF (persistida en Supabase)
+export async function setDisponibleLugar(lugarId: string, disponible: boolean) {
+  const { error } = await supabase
+    .from('lugares')
+    .update({ disponible, updated_at: new Date().toISOString() })
     .eq('id', lugarId)
   if (error) {
     throw error

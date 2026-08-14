@@ -21,7 +21,8 @@ CREATE TABLE IF NOT EXISTS public.lugares (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     nombre TEXT NOT NULL,
     descripcion TEXT,
-    activo BOOLEAN NOT NULL DEFAULT TRUE,
+    activo BOOLEAN NOT NULL DEFAULT TRUE,      -- Visibilidad en Dashboard (Configuración → Visible)
+    disponible BOOLEAN NOT NULL DEFAULT TRUE,  -- Estado operativo ON/OFF (tarjeta del Dashboard)
     is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
