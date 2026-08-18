@@ -27,7 +27,7 @@ export async function ensureUniqueResguardoCodigo(codigoUnico: string): Promise<
 
 // Crear un resguardo
 export async function createResguardo(id: string, data: Omit<Resguardo, 'id' | 'is_deleted'>): Promise<void> {
-  const insertPayload = {
+  const insertPayload: Record<string, any> = {
     id: id || undefined,
     codigo_unico: data.codigo_unico.trim().toUpperCase(),
     nombre: data.nombre.trim(),
@@ -35,6 +35,9 @@ export async function createResguardo(id: string, data: Omit<Resguardo, 'id' | '
     marca: data.marca?.trim() || null,
     modelo: data.modelo?.trim() || null,
     numero_serie: data.numero_serie?.trim() || null,
+    procesador: data.procesador?.trim() || null,
+    memoria: data.memoria?.trim() || null,
+    gpu: data.gpu?.trim() || null,
     area_o_destino: data.area_o_destino?.trim() || null,
     personal_a_cargo: data.personal_a_cargo?.trim() || null,
     estado: data.estado || 'asignado',
@@ -42,7 +45,17 @@ export async function createResguardo(id: string, data: Omit<Resguardo, 'id' | '
     is_deleted: false,
   }
 
-  const { error } = await supabase.from('resguardos').insert([insertPayload])
+  let { error } = await supabase.from('resguardos').insert([insertPayload])
+
+  // Fallback si las nuevas columnas no existen aún en la base de datos remota
+  if (error && (error.code === 'PGRST204' || String(error.message).includes('schema cache') || String(error.message).includes('column'))) {
+    console.warn('Columnas procesador/memoria/gpu no encontradas en BD remota. Reintentando...', error)
+    delete insertPayload.procesador
+    delete insertPayload.memoria
+    delete insertPayload.gpu
+    const res = await supabase.from('resguardos').insert([insertPayload])
+    error = res.error
+  }
 
   if (error) {
     throw error
@@ -122,11 +135,24 @@ export async function updateResguardo(
   id: string,
   data: Partial<Omit<Resguardo, 'id' | 'is_deleted' | 'created_at' | 'updated_at'>>
 ): Promise<void> {
-  const cleanData = { ...data, updated_at: new Date().toISOString() }
-  const { error } = await supabase
+  const cleanData: Record<string, any> = { ...data, updated_at: new Date().toISOString() }
+  let { error } = await supabase
     .from('resguardos')
     .update(cleanData)
     .eq('id', id)
+
+  // Fallback si las nuevas columnas no existen aún en la base de datos remota
+  if (error && (error.code === 'PGRST204' || String(error.message).includes('schema cache') || String(error.message).includes('column'))) {
+    console.warn('Columnas procesador/memoria/gpu no encontradas en BD remota al actualizar. Reintentando...', error)
+    delete cleanData.procesador
+    delete cleanData.memoria
+    delete cleanData.gpu
+    const res = await supabase
+      .from('resguardos')
+      .update(cleanData)
+      .eq('id', id)
+    error = res.error
+  }
 
   if (error) {
     throw error

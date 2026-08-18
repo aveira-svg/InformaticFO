@@ -11,7 +11,7 @@ import { listenTiposEquipo } from '../services/tiposEquipo'
 import { listenProfiles } from '../services/profiles'
 import { listenLugares } from '../services/lugares'
 import type { Resguardo, TipoEquipoDoc, EstadoResguardo, Profile, Lugar } from '../types/supabase'
-import { Search, Plus, Download, History, Trash2, Edit2, ShieldCheck, UserCheck, MapPin, ShoppingCart } from 'lucide-react'
+import { Search, Plus, Download, History, Trash2, Edit2, ShieldCheck, UserCheck, MapPin, ShoppingCart, Cpu } from 'lucide-react'
 import InventarioFaltantesTab from './InventarioFaltantesTab'
 
 export default function EquipmentPage() {
@@ -36,6 +36,9 @@ export default function EquipmentPage() {
   const [marca, setMarca] = useState('')
   const [modelo, setModelo] = useState('')
   const [numeroSerie, setNumeroSerie] = useState('')
+  const [procesador, setProcesador] = useState('')
+  const [memoria, setMemoria] = useState('')
+  const [gpu, setGpu] = useState('')
   const [areaODestino, setAreaODestino] = useState('')
   const [personalACargo, setPersonalACargo] = useState('')
   const [estado, setEstado] = useState<EstadoResguardo>('asignado')
@@ -44,6 +47,15 @@ export default function EquipmentPage() {
   const [checkingCode, setCheckingCode] = useState(false)
   const [isCodeUnique, setIsCodeUnique] = useState<boolean | null>(null)
   const [saving, setSaving] = useState(false)
+
+  // Detectar si la categoría seleccionada es CPU
+  const isCpu = useMemo(() => {
+    if (!tipo) return false
+    const tLower = tipo.trim().toLowerCase()
+    const tipoObj = tiposEquipo.find((t) => t.id === tipo || t.nombre === tipo)
+    const nameLower = tipoObj?.nombre?.trim().toLowerCase() || ''
+    return tLower === 'cpu' || tLower.includes('cpu') || nameLower === 'cpu' || nameLower.includes('cpu')
+  }, [tipo, tiposEquipo])
 
   useEffect(() => {
     const off1 = listenResguardos(setResguardos)
@@ -78,7 +90,7 @@ export default function EquipmentPage() {
     }
   }, [codigo, editingResguardo])
 
-  // Filtrar resguardos contemplando todas las columnas registradas (incluyendo observaciones y detalles)
+  // Filtrar resguardos contemplando todas las columnas registradas (incluyendo especificaciones de CPU y observaciones)
   const resguardosFiltrados = useMemo(() => {
     const q = search.trim().toLowerCase()
     return resguardos.filter((r) => {
@@ -90,6 +102,9 @@ export default function EquipmentPage() {
         r.marca?.toLowerCase().includes(q) ||
         r.modelo?.toLowerCase().includes(q) ||
         r.numero_serie?.toLowerCase().includes(q) ||
+        r.procesador?.toLowerCase().includes(q) ||
+        r.memoria?.toLowerCase().includes(q) ||
+        r.gpu?.toLowerCase().includes(q) ||
         r.area_o_destino?.toLowerCase().includes(q) ||
         r.personal_a_cargo?.toLowerCase().includes(q) ||
         r.estado.toLowerCase().includes(q) ||
@@ -116,6 +131,9 @@ export default function EquipmentPage() {
         marca: marca.trim() || undefined,
         modelo: modelo.trim() || undefined,
         numero_serie: numeroSerie.trim() || undefined,
+        procesador: isCpu ? procesador.trim() || undefined : undefined,
+        memoria: isCpu ? memoria.trim() || undefined : undefined,
+        gpu: isCpu ? gpu.trim() || undefined : undefined,
         area_o_destino: areaODestino.trim() || undefined,
         personal_a_cargo: personalACargo.trim() || undefined,
         estado,
@@ -143,6 +161,9 @@ export default function EquipmentPage() {
         marca: marca.trim() || undefined,
         modelo: modelo.trim() || undefined,
         numero_serie: numeroSerie.trim() || undefined,
+        procesador: isCpu ? procesador.trim() || undefined : undefined,
+        memoria: isCpu ? memoria.trim() || undefined : undefined,
+        gpu: isCpu ? gpu.trim() || undefined : undefined,
         area_o_destino: areaODestino.trim() || undefined,
         personal_a_cargo: personalACargo.trim() || undefined,
         estado,
@@ -182,6 +203,9 @@ export default function EquipmentPage() {
     setMarca('')
     setModelo('')
     setNumeroSerie('')
+    setProcesador('')
+    setMemoria('')
+    setGpu('')
     setAreaODestino('')
     setPersonalACargo('')
     setEstado('asignado')
@@ -191,7 +215,7 @@ export default function EquipmentPage() {
 
   // Exportar a CSV
   function exportCSV() {
-    const headers = ['ID', 'Codigo Unico', 'Nombre', 'Tipo', 'Marca', 'Modelo', 'Numero Serie', 'Area / Destino', 'Personal a Cargo', 'Estado', 'Observaciones']
+    const headers = ['ID', 'Codigo Unico', 'Nombre', 'Tipo', 'Marca', 'Modelo', 'Numero Serie', 'Procesador', 'Memoria', 'GPU', 'Area / Destino', 'Personal a Cargo', 'Estado', 'Observaciones']
     const rows = resguardosFiltrados.map((r) => [
       r.id,
       r.codigo_unico,
@@ -200,6 +224,9 @@ export default function EquipmentPage() {
       r.marca || '',
       r.modelo || '',
       r.numero_serie || '',
+      `"${(r.procesador || '').replace(/"/g, '""')}"`,
+      `"${(r.memoria || '').replace(/"/g, '""')}"`,
+      `"${(r.gpu || '').replace(/"/g, '""')}"`,
       `"${(r.area_o_destino || '').replace(/"/g, '""')}"`,
       `"${(r.personal_a_cargo || '').replace(/"/g, '""')}"`,
       r.estado,
@@ -343,6 +370,25 @@ export default function EquipmentPage() {
                         {r.marca || ''} {r.modelo ? `(${r.modelo})` : ''}
                       </div>
                     )}
+                    {(r.procesador || r.memoria || r.gpu) && (
+                      <div className="flex flex-wrap gap-1 mt-1 text-[10px]">
+                        {r.procesador && (
+                          <span className="bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 px-1.5 py-0.5 rounded font-mono">
+                            CPU: {r.procesador}
+                          </span>
+                        )}
+                        {r.memoria && (
+                          <span className="bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 px-1.5 py-0.5 rounded font-mono">
+                            RAM: {r.memoria}
+                          </span>
+                        )}
+                        {r.gpu && (
+                          <span className="bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 px-1.5 py-0.5 rounded font-mono">
+                            GPU: {r.gpu}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <span className="bg-slate-950 px-2 py-0.5 rounded border border-slate-800 text-[11px]">
@@ -400,6 +446,9 @@ export default function EquipmentPage() {
                         setMarca(r.marca || '')
                         setModelo(r.modelo || '')
                         setNumeroSerie(r.numero_serie || '')
+                        setProcesador(r.procesador || '')
+                        setMemoria(r.memoria || '')
+                        setGpu(r.gpu || '')
                         setAreaODestino(r.area_o_destino || '')
                         setPersonalACargo(r.personal_a_cargo || '')
                         setEstado(r.estado)
@@ -435,7 +484,7 @@ export default function EquipmentPage() {
       {/* Modal Agregar Resguardo */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-md card bg-slate-900 border border-slate-800 p-5 rounded-xl text-slate-100 shadow-2xl animate-in">
+          <div className="w-full max-w-md card bg-slate-900 border border-slate-800 p-5 rounded-xl text-slate-100 shadow-2xl animate-in max-h-[88dvh] overflow-y-auto">
             <h3 className="font-bold text-slate-100 text-base mb-4 border-b border-slate-800 pb-2">Registrar Nuevo Resguardo</h3>
             <form onSubmit={handleCreate} className="space-y-3">
               <div className="grid gap-1">
@@ -459,7 +508,7 @@ export default function EquipmentPage() {
                   required
                   type="text"
                   className="bg-slate-950 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-100 outline-none focus:border-cyan-500"
-                  placeholder="Impresora HP LaserJet Pro"
+                  placeholder="Impresora HP / Computadora de Escritorio"
                   value={nombre}
                   onChange={(e) => setNombre(e.target.value)}
                 />
@@ -480,13 +529,58 @@ export default function EquipmentPage() {
                 </select>
               </div>
 
+              {/* Subcampos de Hardware para Categoría CPU */}
+              {isCpu && (
+                <div className="p-3 bg-cyan-950/25 border border-cyan-500/30 rounded-xl space-y-2.5">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-cyan-300">
+                    <Cpu className="size-4 text-cyan-400" />
+                    <span>Especificaciones de Hardware (CPU)</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <div className="grid gap-1">
+                      <label className="text-[11px] font-semibold text-slate-300">Procesador</label>
+                      <input
+                        type="text"
+                        className="bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-100 outline-none focus:border-cyan-500"
+                        placeholder="ej: Intel i5-10400"
+                        value={procesador}
+                        onChange={(e) => setProcesador(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="grid gap-1">
+                      <label className="text-[11px] font-semibold text-slate-300">Memoria (RAM)</label>
+                      <input
+                        type="text"
+                        className="bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-100 outline-none focus:border-cyan-500"
+                        placeholder="ej: 16 GB DDR4"
+                        value={memoria}
+                        onChange={(e) => setMemoria(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="grid gap-1">
+                      <label className="text-[11px] font-semibold text-slate-300">GPU / Gráfica</label>
+                      <input
+                        type="text"
+                        className="bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-100 outline-none focus:border-cyan-500"
+                        placeholder="ej: GTX 1650 4GB"
+                        value={gpu}
+                        onChange={(e) => setGpu(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-2">
                 <div className="grid gap-1">
                   <label className="text-xs font-semibold text-slate-300">Marca</label>
                   <input
                     type="text"
                     className="bg-slate-950 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-100 outline-none"
-                    placeholder="HP"
+                    placeholder="HP, Lenovo, Dell..."
                     value={marca}
                     onChange={(e) => setMarca(e.target.value)}
                   />
@@ -496,11 +590,22 @@ export default function EquipmentPage() {
                   <input
                     type="text"
                     className="bg-slate-950 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-100 outline-none"
-                    placeholder="M404dn"
+                    placeholder="OptiPlex 7090..."
                     value={modelo}
                     onChange={(e) => setModelo(e.target.value)}
                   />
                 </div>
+              </div>
+
+              <div className="grid gap-1">
+                <label className="text-xs font-semibold text-slate-300">Número de Serie (Opcional)</label>
+                <input
+                  type="text"
+                  className="bg-slate-950 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-100 outline-none"
+                  placeholder="S/N: 4CE0460D..."
+                  value={numeroSerie}
+                  onChange={(e) => setNumeroSerie(e.target.value)}
+                />
               </div>
 
               <div className="grid gap-1">
@@ -575,6 +680,17 @@ export default function EquipmentPage() {
                 </select>
               </div>
 
+              <div className="grid gap-1">
+                <label className="text-xs font-semibold text-slate-300">Observaciones (Opcional)</label>
+                <textarea
+                  className="bg-slate-950 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-100 outline-none"
+                  rows={2}
+                  placeholder="Detalles adicionales, número de inventario patrimonial, etc..."
+                  value={observaciones}
+                  onChange={(e) => setObservaciones(e.target.value)}
+                />
+              </div>
+
               <div className="grid grid-cols-2 gap-2 pt-2">
                 <button
                   type="submit"
@@ -599,7 +715,7 @@ export default function EquipmentPage() {
       {/* Modal Editar Resguardo */}
       {editingResguardo && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-md card bg-slate-900 border border-slate-800 p-5 rounded-xl text-slate-100 shadow-2xl animate-in">
+          <div className="w-full max-w-md card bg-slate-900 border border-slate-800 p-5 rounded-xl text-slate-100 shadow-2xl animate-in max-h-[88dvh] overflow-y-auto">
             <h3 className="font-bold text-slate-100 text-base mb-4 border-b border-slate-800 pb-2">
               Editar Resguardo ({editingResguardo.codigo_unico})
             </h3>
@@ -628,6 +744,84 @@ export default function EquipmentPage() {
                     </option>
                   ))}
                 </select>
+              </div>
+
+              {/* Subcampos de Hardware para Categoría CPU */}
+              {isCpu && (
+                <div className="p-3 bg-cyan-950/25 border border-cyan-500/30 rounded-xl space-y-2.5">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-cyan-300">
+                    <Cpu className="size-4 text-cyan-400" />
+                    <span>Especificaciones de Hardware (CPU)</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <div className="grid gap-1">
+                      <label className="text-[11px] font-semibold text-slate-300">Procesador</label>
+                      <input
+                        type="text"
+                        className="bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-100 outline-none focus:border-cyan-500"
+                        placeholder="ej: Intel i5-10400"
+                        value={procesador}
+                        onChange={(e) => setProcesador(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="grid gap-1">
+                      <label className="text-[11px] font-semibold text-slate-300">Memoria (RAM)</label>
+                      <input
+                        type="text"
+                        className="bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-100 outline-none focus:border-cyan-500"
+                        placeholder="ej: 16 GB DDR4"
+                        value={memoria}
+                        onChange={(e) => setMemoria(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="grid gap-1">
+                      <label className="text-[11px] font-semibold text-slate-300">GPU / Gráfica</label>
+                      <input
+                        type="text"
+                        className="bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-100 outline-none focus:border-cyan-500"
+                        placeholder="ej: GTX 1650 4GB"
+                        value={gpu}
+                        onChange={(e) => setGpu(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-2">
+                <div className="grid gap-1">
+                  <label className="text-xs font-semibold text-slate-300">Marca</label>
+                  <input
+                    type="text"
+                    className="bg-slate-950 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-100 outline-none"
+                    placeholder="HP, Lenovo, Dell..."
+                    value={marca}
+                    onChange={(e) => setMarca(e.target.value)}
+                  />
+                </div>
+                <div className="grid gap-1">
+                  <label className="text-xs font-semibold text-slate-300">Modelo</label>
+                  <input
+                    type="text"
+                    className="bg-slate-950 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-100 outline-none"
+                    placeholder="OptiPlex 7090..."
+                    value={modelo}
+                    onChange={(e) => setModelo(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-1">
+                <label className="text-xs font-semibold text-slate-300">Número de Serie (Opcional)</label>
+                <input
+                  type="text"
+                  className="bg-slate-950 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-100 outline-none"
+                  value={numeroSerie}
+                  onChange={(e) => setNumeroSerie(e.target.value)}
+                />
               </div>
 
               <div className="grid gap-1">
@@ -699,6 +893,17 @@ export default function EquipmentPage() {
                   <option value="en_reparacion">En Reparación</option>
                   <option value="de_baja">De Baja</option>
                 </select>
+              </div>
+
+              <div className="grid gap-1">
+                <label className="text-xs font-semibold text-slate-300">Observaciones (Opcional)</label>
+                <textarea
+                  className="bg-slate-950 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-100 outline-none"
+                  rows={2}
+                  placeholder="Detalles adicionales, número de inventario patrimonial, etc..."
+                  value={observaciones}
+                  onChange={(e) => setObservaciones(e.target.value)}
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-2 pt-2">

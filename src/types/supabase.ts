@@ -61,6 +61,9 @@ export interface Resguardo {
   marca?: string
   modelo?: string
   numero_serie?: string
+  procesador?: string
+  memoria?: string
+  gpu?: string
   area_o_destino?: string
   personal_a_cargo?: string
   estado: EstadoResguardo
