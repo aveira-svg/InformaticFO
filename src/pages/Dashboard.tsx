@@ -347,6 +347,10 @@ export default function Dashboard() {
     return eventosAgenda.filter((e) => e.fecha === hoyStr).length
   }, [eventosAgenda, currentTime])
 
+  const totalLugaresActivosCount = useMemo(() => {
+    return lugaresFiltrados.filter((l) => l.disponible ?? true).length
+  }, [lugaresFiltrados])
+
   return (
     <div className="space-y-6">
       {notificationPermission !== 'granted' && eventosAgenda.length > 0 && (
@@ -393,8 +397,8 @@ export default function Dashboard() {
             <CheckCircle className="size-6" />
           </div>
           <div>
-            <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">Lugares Visibles</p>
-            <p className="text-2xl font-extrabold text-emerald-400">{lugaresFiltrados.length}</p>
+            <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">Lugares Activos</p>
+            <p className="text-2xl font-extrabold text-emerald-400">{totalLugaresActivosCount}</p>
           </div>
         </div>
       </div>
@@ -402,7 +406,10 @@ export default function Dashboard() {
       <div className="space-y-3">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2">
-            <span>Ubicaciones e Infraestructura Visibles</span>
+            <span>Ubicaciones e Infraestructura</span>
+            <span className="text-xs px-2 py-0.5 bg-slate-800 text-cyan-400 rounded-full border border-slate-700">
+              {lugaresFiltrados.length}
+            </span>
           </h2>
           <button
             onClick={() => setShowPersonalForm(true)}
