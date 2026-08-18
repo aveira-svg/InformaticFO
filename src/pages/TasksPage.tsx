@@ -39,6 +39,7 @@ export default function TasksPage() {
   const [savingUpdate, setSavingUpdate] = useState(false)
 
   const [viewHistoryTask, setViewHistoryTask] = useState<any | null>(null)
+  const [historyUpdates, setHistoryUpdates] = useState<any[]>([])
 
   useEffect(() => {
     const offProfiles = listenProfiles(setProfiles)
@@ -54,14 +55,22 @@ export default function TasksPage() {
   }, [])
 
   useEffect(() => {
-    const activeId = activeUpdatesTaskId || viewHistoryTask?.id
-    if (!activeId) {
+    if (!activeUpdatesTaskId) {
       setTaskUpdates([])
       return
     }
-    const offUpdates = listenTaskUpdates(activeId, setTaskUpdates)
+    const offUpdates = listenTaskUpdates(activeUpdatesTaskId, setTaskUpdates)
     return () => offUpdates()
-  }, [activeUpdatesTaskId, viewHistoryTask])
+  }, [activeUpdatesTaskId])
+
+  useEffect(() => {
+    if (!viewHistoryTask?.id) {
+      setHistoryUpdates([])
+      return
+    }
+    const offHistoryUpdates = listenTaskUpdates(viewHistoryTask.id, setHistoryUpdates)
+    return () => offHistoryUpdates()
+  }, [viewHistoryTask])
 
   const profilesMap = useMemo(() => {
     const m = new Map<string, Profile>()
@@ -526,8 +535,38 @@ export default function TasksPage() {
                 </div>
               </div>
 
+              {/* Registro de Actualizaciones / Avances */}
+              <div className="border-t border-slate-800 pt-3 space-y-2">
+                <div className="flex items-center justify-between text-slate-400 font-semibold">
+                  <span className="flex items-center gap-1.5 text-cyan-300">
+                    <MessageSquare className="size-3.5 text-cyan-400" />
+                    <span>Actualizaciones y Avances Registrados ({historyUpdates.length})</span>
+                  </span>
+                </div>
+
+                <div className="bg-slate-950 p-3 rounded-lg border border-slate-800 space-y-2 max-h-48 overflow-y-auto">
+                  {historyUpdates.length === 0 ? (
+                    <p className="text-[11px] text-slate-500 text-center py-2">
+                      No se registraron avances intermedios durante el desarrollo de esta tarea.
+                    </p>
+                  ) : (
+                    historyUpdates.map((up) => (
+                      <div key={up.id} className="border-b border-slate-800/80 pb-2 last:border-b-0 last:pb-0">
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="text-cyan-400 font-bold">{up.creator?.short_name || 'Personal'}</span>
+                          <span className="text-slate-500 font-mono text-[10px]">
+                            {new Date(up.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+                          </span>
+                        </div>
+                        <p className="text-slate-200 text-xs mt-0.5 break-words whitespace-pre-wrap">{up.update_text}</p>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
               <div>
-                <span className="text-slate-400 font-semibold">Nota de Resolución:</span>
+                <span className="text-slate-400 font-semibold">Nota de Resolución / Cierre:</span>
                 <p className="mt-1 p-2.5 bg-emerald-950/40 text-emerald-200 border border-emerald-800/60 rounded font-medium">
                   {viewHistoryTask.completion_message || 'Sin comentarios adicionales.'}
                 </p>
