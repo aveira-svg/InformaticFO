@@ -468,29 +468,79 @@ RETURNS trigger AS $$
 DECLARE
   v_action TEXT;
   v_details TEXT;
+  v_changes TEXT[];
 BEGIN
   IF TG_OP = 'INSERT' THEN
     v_action := 'creacion';
-    v_details := 'Registro inicial del resguardo en el sistema';
+    v_details := 'Registro inicial del resguardo en el sistema (' || NEW.codigo_unico || ' - ' || NEW.nombre || ')';
     
     INSERT INTO public.resguardo_history (resguardo_id, user_id, action_type, new_state, new_location, details)
     VALUES (NEW.id, auth.uid(), v_action, NEW.estado, COALESCE(NEW.area_o_destino, NEW.personal_a_cargo), v_details);
   ELSIF TG_OP = 'UPDATE' THEN
-    IF OLD.estado <> NEW.estado OR OLD.area_o_destino <> NEW.area_o_destino OR OLD.personal_a_cargo <> NEW.personal_a_cargo OR OLD.is_deleted <> NEW.is_deleted THEN
-      IF NEW.is_deleted = TRUE THEN
+    IF (OLD.estado IS DISTINCT FROM NEW.estado) OR
+       (OLD.area_o_destino IS DISTINCT FROM NEW.area_o_destino) OR
+       (OLD.personal_a_cargo IS DISTINCT FROM NEW.personal_a_cargo) OR
+       (OLD.nombre IS DISTINCT FROM NEW.nombre) OR
+       (OLD.tipo IS DISTINCT FROM NEW.tipo) OR
+       (OLD.marca IS DISTINCT FROM NEW.marca) OR
+       (OLD.modelo IS DISTINCT FROM NEW.modelo) OR
+       (OLD.numero_serie IS DISTINCT FROM NEW.numero_serie) OR
+       (OLD.procesador IS DISTINCT FROM NEW.procesador) OR
+       (OLD.memoria IS DISTINCT FROM NEW.memoria) OR
+       (OLD.gpu IS DISTINCT FROM NEW.gpu) OR
+       (OLD.observaciones IS DISTINCT FROM NEW.observaciones) OR
+       (OLD.is_deleted IS DISTINCT FROM NEW.is_deleted) THEN
+
+      v_changes := ARRAY[]::TEXT[];
+
+      IF OLD.nombre IS DISTINCT FROM NEW.nombre THEN
+        v_changes := array_append(v_changes, 'Nombre: ' || COALESCE(OLD.nombre, '—') || ' ➔ ' || COALESCE(NEW.nombre, '—'));
+      END IF;
+      IF OLD.tipo IS DISTINCT FROM NEW.tipo THEN
+        v_changes := array_append(v_changes, 'Tipo: ' || COALESCE(OLD.tipo, '—') || ' ➔ ' || COALESCE(NEW.tipo, '—'));
+      END IF;
+      IF OLD.marca IS DISTINCT FROM NEW.marca OR OLD.modelo IS DISTINCT FROM NEW.modelo THEN
+        v_changes := array_append(v_changes, 'Marca/Modelo: ' || COALESCE(OLD.marca || ' ' || COALESCE(OLD.modelo, ''), '—') || ' ➔ ' || COALESCE(NEW.marca || ' ' || COALESCE(NEW.modelo, ''), '—'));
+      END IF;
+      IF OLD.numero_serie IS DISTINCT FROM NEW.numero_serie THEN
+        v_changes := array_append(v_changes, 'N° Serie: ' || COALESCE(OLD.numero_serie, '—') || ' ➔ ' || COALESCE(NEW.numero_serie, '—'));
+      END IF;
+      IF OLD.procesador IS DISTINCT FROM NEW.procesador THEN
+        v_changes := array_append(v_changes, 'Procesador: ' || COALESCE(OLD.procesador, '—') || ' ➔ ' || COALESCE(NEW.procesador, '—'));
+      END IF;
+      IF OLD.memoria IS DISTINCT FROM NEW.memoria THEN
+        v_changes := array_append(v_changes, 'Memoria: ' || COALESCE(OLD.memoria, '—') || ' ➔ ' || COALESCE(NEW.memoria, '—'));
+      END IF;
+      IF OLD.gpu IS DISTINCT FROM NEW.gpu THEN
+        v_changes := array_append(v_changes, 'GPU: ' || COALESCE(OLD.gpu, '—') || ' ➔ ' || COALESCE(NEW.gpu, '—'));
+      END IF;
+      IF OLD.area_o_destino IS DISTINCT FROM NEW.area_o_destino THEN
+        v_changes := array_append(v_changes, 'Área: ' || COALESCE(OLD.area_o_destino, '—') || ' ➔ ' || COALESCE(NEW.area_o_destino, '—'));
+      END IF;
+      IF OLD.personal_a_cargo IS DISTINCT FROM NEW.personal_a_cargo THEN
+        v_changes := array_append(v_changes, 'Responsable: ' || COALESCE(OLD.personal_a_cargo, '—') || ' ➔ ' || COALESCE(NEW.personal_a_cargo, '—'));
+      END IF;
+      IF OLD.estado IS DISTINCT FROM NEW.estado THEN
+        v_changes := array_append(v_changes, 'Estado: ' || OLD.estado || ' ➔ ' || NEW.estado);
+      END IF;
+
+      IF NEW.is_deleted = TRUE AND OLD.is_deleted = FALSE THEN
         v_action := 'baja';
         v_details := 'Resguardo dado de baja lógica del sistema';
-      ELSIF NEW.estado = 'de_baja' THEN
+      ELSIF NEW.estado = 'de_baja' AND OLD.estado <> 'de_baja' THEN
         v_action := 'baja';
         v_details := 'Resguardo marcado como De Baja';
-      ELSIF NEW.estado = 'en_reparacion' THEN
+      ELSIF NEW.estado = 'en_reparacion' AND OLD.estado <> 'en_reparacion' THEN
         v_action := 'reparacion';
         v_details := 'Resguardo derivado a reparación';
+      ELSIF OLD.area_o_destino IS DISTINCT FROM NEW.area_o_destino OR OLD.personal_a_cargo IS DISTINCT FROM NEW.personal_a_cargo THEN
+        v_action := 'asignacion';
+        v_details := COALESCE(array_to_string(v_changes, ' | '), 'Reasignación de área o responsable');
       ELSE
         v_action := 'edicion';
-        v_details := 'Modificación de estado, asignación o área destino';
+        v_details := COALESCE(array_to_string(v_changes, ' | '), 'Modificación de datos del bien');
       END IF;
-      
+
       INSERT INTO public.resguardo_history (resguardo_id, user_id, action_type, previous_state, new_state, previous_location, new_location, details)
       VALUES (NEW.id, auth.uid(), v_action, OLD.estado, NEW.estado, COALESCE(OLD.area_o_destino, OLD.personal_a_cargo), COALESCE(NEW.area_o_destino, NEW.personal_a_cargo), v_details);
     END IF;

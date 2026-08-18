@@ -188,3 +188,65 @@ export async function getResguardoHistory(resguardoId: string): Promise<any[]> {
   }
   return data || []
 }
+
+// Registrar entrada de trazabilidad
+export async function logResguardoHistory(entry: {
+  resguardo_id: string
+  action_type: 'creacion' | 'edicion' | 'baja' | 'asignacion' | 'reparacion'
+  previous_state?: string | null
+  new_state?: string | null
+  previous_location?: string | null
+  new_location?: string | null
+  details?: string | null
+  user_id?: string | null
+}): Promise<void> {
+  try {
+    let uid = entry.user_id
+    if (!uid) {
+      const { data } = await supabase.auth.getUser()
+      uid = data?.user?.id || null
+    }
+
+    await supabase.from('resguardo_history').insert([
+      {
+        resguardo_id: entry.resguardo_id,
+        user_id: uid,
+        action_type: entry.action_type,
+        previous_state: entry.previous_state || null,
+        new_state: entry.new_state || null,
+        previous_location: entry.previous_location || null,
+        new_location: entry.new_location || null,
+        details: entry.details || null,
+        timestamp: new Date().toISOString(),
+      },
+    ])
+  } catch (err) {
+    console.warn('Error recording resguardo history:', err)
+  }
+}
+
+// Escuchar cambios en el historial de trazabilidad en tiempo real
+export function listenResguardoHistory(resguardoId: string, cb: (logs: any[]) => void): () => void {
+  const fetchHistory = () => {
+    getResguardoHistory(resguardoId).then(cb)
+  }
+
+  fetchHistory()
+
+  const channelId = `resguardo_history_${resguardoId}_` + Math.random().toString(36).substring(2, 9)
+  const channel = supabase
+    .channel(channelId)
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'resguardo_history', filter: `resguardo_id=eq.${resguardoId}` },
+      () => {
+        fetchHistory()
+      }
+    )
+    .subscribe()
+
+  return () => {
+    supabase.removeChannel(channel)
+  }
+}
+

@@ -6,6 +6,8 @@ import {
   deleteResguardo,
   ensureUniqueResguardoCodigo,
   getResguardoHistory,
+  logResguardoHistory,
+  listenResguardoHistory,
 } from '../services/resguardos'
 import { listenTiposEquipo } from '../services/tiposEquipo'
 import { listenProfiles } from '../services/profiles'
@@ -70,6 +72,15 @@ export default function EquipmentPage() {
     }
   }, [])
 
+  // Escuchar historial en tiempo real cuando el modal de trazabilidad está abierto
+  useEffect(() => {
+    if (!historyResguardo?.resguardo?.id) return
+    const off = listenResguardoHistory(historyResguardo.resguardo.id, (logs) => {
+      setHistoryResguardo((prev) => (prev ? { ...prev, logs } : null))
+    })
+    return () => off()
+  }, [historyResguardo?.resguardo?.id])
+
   // Comprobar código único en alta
   useEffect(() => {
     let active = true
@@ -124,7 +135,7 @@ export default function EquipmentPage() {
     setSaving(true)
     try {
       const id = crypto.randomUUID()
-      await createResguardo(id, {
+      const payload = {
         codigo_unico: codigo.trim().toUpperCase(),
         nombre: nombre.trim(),
         tipo: tipo || (tiposEquipo[0]?.id ?? 'General'),
@@ -138,7 +149,29 @@ export default function EquipmentPage() {
         personal_a_cargo: personalACargo.trim() || undefined,
         estado,
         observaciones: observaciones.trim() || undefined,
+      }
+
+      await createResguardo(id, payload)
+
+      // Registrar en historial de trazabilidad
+      const hardwareDetails = [
+        payload.procesador ? `CPU: ${payload.procesador}` : null,
+        payload.memoria ? `RAM: ${payload.memoria}` : null,
+        payload.gpu ? `GPU: ${payload.gpu}` : null,
+      ]
+        .filter(Boolean)
+        .join(', ')
+
+      await logResguardoHistory({
+        resguardo_id: id,
+        action_type: 'creacion',
+        new_state: payload.estado,
+        new_location: payload.area_o_destino || payload.personal_a_cargo || 'Sin asignar',
+        details: `Alta inicial del bien (${payload.codigo_unico} - ${payload.nombre}). ${
+          hardwareDetails ? `Specs: [${hardwareDetails}]. ` : ''
+        }Área: ${payload.area_o_destino || '—'}. Responsable: ${payload.personal_a_cargo || '—'}.`,
       })
+
       setShowAddModal(false)
       resetForm()
     } catch (err) {
@@ -149,13 +182,13 @@ export default function EquipmentPage() {
     }
   }
 
-  // Actualizar resguardo
+  // Actualizar resguardo y registrar diferencias en trazabilidad
   async function handleUpdate(e: React.FormEvent) {
     e.preventDefault()
     if (!editingResguardo) return
     setSaving(true)
     try {
-      await updateResguardo(editingResguardo.id, {
+      const payload = {
         nombre: nombre.trim(),
         tipo,
         marca: marca.trim() || undefined,
@@ -168,7 +201,68 @@ export default function EquipmentPage() {
         personal_a_cargo: personalACargo.trim() || undefined,
         estado,
         observaciones: observaciones.trim() || undefined,
+      }
+
+      await updateResguardo(editingResguardo.id, payload)
+
+      // Detectar cambios detallados para la bitácora
+      const changes: string[] = []
+      if (editingResguardo.nombre !== payload.nombre) {
+        changes.push(`Nombre: "${editingResguardo.nombre}" ➔ "${payload.nombre}"`)
+      }
+      if (editingResguardo.tipo !== payload.tipo) {
+        changes.push(`Tipo: "${editingResguardo.tipo}" ➔ "${payload.tipo}"`)
+      }
+      if ((editingResguardo.marca || '') !== (payload.marca || '')) {
+        changes.push(`Marca: "${editingResguardo.marca || '—'}" ➔ "${payload.marca || '—'}"`)
+      }
+      if ((editingResguardo.modelo || '') !== (payload.modelo || '')) {
+        changes.push(`Modelo: "${editingResguardo.modelo || '—'}" ➔ "${payload.modelo || '—'}"`)
+      }
+      if ((editingResguardo.numero_serie || '') !== (payload.numero_serie || '')) {
+        changes.push(`N° Serie: "${editingResguardo.numero_serie || '—'}" ➔ "${payload.numero_serie || '—'}"`)
+      }
+      if ((editingResguardo.procesador || '') !== (payload.procesador || '')) {
+        changes.push(`Procesador: "${editingResguardo.procesador || '—'}" ➔ "${payload.procesador || '—'}"`)
+      }
+      if ((editingResguardo.memoria || '') !== (payload.memoria || '')) {
+        changes.push(`Memoria: "${editingResguardo.memoria || '—'}" ➔ "${payload.memoria || '—'}"`)
+      }
+      if ((editingResguardo.gpu || '') !== (payload.gpu || '')) {
+        changes.push(`GPU: "${editingResguardo.gpu || '—'}" ➔ "${payload.gpu || '—'}"`)
+      }
+      if ((editingResguardo.area_o_destino || '') !== (payload.area_o_destino || '')) {
+        changes.push(`Área/Destino: "${editingResguardo.area_o_destino || '—'}" ➔ "${payload.area_o_destino || '—'}"`)
+      }
+      if ((editingResguardo.personal_a_cargo || '') !== (payload.personal_a_cargo || '')) {
+        changes.push(`Responsable: "${editingResguardo.personal_a_cargo || '—'}" ➔ "${payload.personal_a_cargo || '—'}"`)
+      }
+      if (editingResguardo.estado !== payload.estado) {
+        changes.push(`Estado: "${editingResguardo.estado}" ➔ "${payload.estado}"`)
+      }
+      if ((editingResguardo.observaciones || '') !== (payload.observaciones || '')) {
+        changes.push(`Observaciones actualizadas`)
+      }
+
+      const actionType =
+        payload.estado === 'de_baja'
+          ? 'baja'
+          : payload.estado === 'en_reparacion'
+          ? 'reparacion'
+          : editingResguardo.area_o_destino !== payload.area_o_destino || editingResguardo.personal_a_cargo !== payload.personal_a_cargo
+          ? 'asignacion'
+          : 'edicion'
+
+      await logResguardoHistory({
+        resguardo_id: editingResguardo.id,
+        action_type: actionType,
+        previous_state: editingResguardo.estado,
+        new_state: payload.estado,
+        previous_location: editingResguardo.area_o_destino || editingResguardo.personal_a_cargo,
+        new_location: payload.area_o_destino || payload.personal_a_cargo,
+        details: changes.length > 0 ? changes.join(' | ') : 'Actualización de datos del bien',
       })
+
       setEditingResguardo(null)
       resetForm()
     } catch (err) {
@@ -184,6 +278,14 @@ export default function EquipmentPage() {
     if (!confirm(`¿Dar de baja lógica al resguardo ${r.codigo_unico} — ${r.nombre}?`)) return
     try {
       await deleteResguardo(r.id)
+      await logResguardoHistory({
+        resguardo_id: r.id,
+        action_type: 'baja',
+        previous_state: r.estado,
+        new_state: 'de_baja',
+        previous_location: r.area_o_destino || r.personal_a_cargo,
+        details: `Baja lógica del bien ${r.codigo_unico} (${r.nombre})`,
+      })
     } catch (err) {
       console.error(err)
       alert('Error al dar de baja el resguardo')
@@ -930,39 +1032,125 @@ export default function EquipmentPage() {
       {/* Modal Historial de Trazabilidad */}
       {historyResguardo && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-lg card bg-slate-900 border border-slate-800 p-5 rounded-xl text-slate-100 max-h-[85dvh] overflow-y-auto shadow-2xl animate-in">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-2 mb-4">
+          <div className="w-full max-w-lg card bg-slate-900 border border-slate-800 p-5 rounded-xl text-slate-100 max-h-[88dvh] overflow-y-auto shadow-2xl animate-in space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div>
-                <h3 className="font-bold text-cyan-400 text-base">Historial de Trazabilidad</h3>
-                <p className="text-xs text-slate-400">
-                  {historyResguardo.resguardo.codigo_unico} — {historyResguardo.resguardo.nombre}
+                <h3 className="font-bold text-cyan-400 text-base flex items-center gap-2">
+                  <History className="size-5 text-cyan-400" />
+                  <span>Historial de Trazabilidad</span>
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  <strong className="text-cyan-300 font-mono">{historyResguardo.resguardo.codigo_unico}</strong> — {historyResguardo.resguardo.nombre}
                 </p>
               </div>
               <button
-                className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-2.5 py-1 rounded cursor-pointer"
+                className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-lg cursor-pointer transition border border-slate-700"
                 onClick={() => setHistoryResguardo(null)}
               >
                 Cerrar
               </button>
             </div>
 
-            <div className="space-y-3">
-              {historyResguardo.logs.map((log) => (
-                <div key={log.id} className="p-3 bg-slate-950 border border-slate-800 rounded-lg text-xs space-y-1">
-                  <div className="flex items-center justify-between font-semibold text-slate-300">
-                    <span className="uppercase text-cyan-400">{log.action_type}</span>
-                    <span className="text-[10px] text-slate-500">{new Date(log.timestamp).toLocaleString()}</span>
-                  </div>
-                  {log.details && <p className="text-slate-400 mt-1">{log.details}</p>}
-                  {log.user?.short_name && (
-                    <p className="text-[10px] text-slate-500">Por: {log.user.short_name}</p>
+            {/* Resumen actual del Bien */}
+            <div className="p-3 bg-slate-950/80 border border-slate-800 rounded-xl text-xs grid grid-cols-2 gap-2">
+              <div>
+                <span className="text-slate-500 font-semibold">Estado actual:</span>
+                <p className="font-semibold text-slate-200 capitalize mt-0.5">{historyResguardo.resguardo.estado}</p>
+              </div>
+              <div>
+                <span className="text-slate-500 font-semibold">Ubicación / Responsable:</span>
+                <p className="font-semibold text-slate-200 truncate mt-0.5">
+                  {historyResguardo.resguardo.area_o_destino || historyResguardo.resguardo.personal_a_cargo || 'Sin asignar'}
+                </p>
+              </div>
+              {(historyResguardo.resguardo.procesador || historyResguardo.resguardo.memoria || historyResguardo.resguardo.gpu) && (
+                <div className="col-span-2 pt-1.5 border-t border-slate-900 flex flex-wrap gap-1 text-[10px]">
+                  {historyResguardo.resguardo.procesador && (
+                    <span className="bg-slate-900 text-cyan-300 px-1.5 py-0.5 rounded border border-slate-800 font-mono">
+                      CPU: {historyResguardo.resguardo.procesador}
+                    </span>
+                  )}
+                  {historyResguardo.resguardo.memoria && (
+                    <span className="bg-slate-900 text-indigo-300 px-1.5 py-0.5 rounded border border-slate-800 font-mono">
+                      RAM: {historyResguardo.resguardo.memoria}
+                    </span>
+                  )}
+                  {historyResguardo.resguardo.gpu && (
+                    <span className="bg-slate-900 text-emerald-300 px-1.5 py-0.5 rounded border border-slate-800 font-mono">
+                      GPU: {historyResguardo.resguardo.gpu}
+                    </span>
                   )}
                 </div>
-              ))}
-
-              {historyResguardo.logs.length === 0 && (
-                <p className="text-xs text-slate-500 text-center py-6">No hay registros de trazabilidad previos</p>
               )}
+            </div>
+
+            {/* Timeline de todas las actualizaciones */}
+            <div className="space-y-2.5">
+              <h4 className="text-xs font-bold text-slate-300 flex items-center justify-between">
+                <span>Línea de Tiempo de Actualizaciones ({historyResguardo.logs.length})</span>
+              </h4>
+
+              <div className="space-y-2 max-h-80 overflow-y-auto pr-0.5">
+                {historyResguardo.logs.map((log) => {
+                  const isCreacion = log.action_type === 'creacion'
+                  const isBaja = log.action_type === 'baja'
+                  const isReparacion = log.action_type === 'reparacion'
+                  const isAsignacion = log.action_type === 'asignacion'
+
+                  const badgeClass = isCreacion
+                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                    : isBaja
+                    ? 'bg-red-500/10 text-red-400 border-red-500/20'
+                    : isReparacion
+                    ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                    : isAsignacion
+                    ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20'
+                    : 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20'
+
+                  return (
+                    <div key={log.id} className="p-3 bg-slate-950 border border-slate-800 rounded-xl text-xs space-y-1.5">
+                      <div className="flex items-center justify-between font-semibold">
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider border ${badgeClass}`}>
+                          {log.action_type}
+                        </span>
+                        <span className="text-[10px] text-slate-500 font-mono">
+                          {new Date(log.timestamp).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+                        </span>
+                      </div>
+
+                      {log.details && (
+                        <p className="text-slate-200 font-medium text-xs break-words whitespace-pre-wrap leading-relaxed">
+                          {log.details}
+                        </p>
+                      )}
+
+                      <div className="flex items-center justify-between pt-1 border-t border-slate-900 text-[10px] text-slate-400">
+                        <span>
+                          {log.previous_state && log.new_state && log.previous_state !== log.new_state ? (
+                            <span>
+                              Estado: <strong className="text-slate-300">{log.previous_state}</strong> ➔ <strong className="text-cyan-300">{log.new_state}</strong>
+                            </span>
+                          ) : log.new_state ? (
+                            <span>
+                              Estado: <strong className="text-slate-300">{log.new_state}</strong>
+                            </span>
+                          ) : null}
+                        </span>
+
+                        <span className="text-slate-500">
+                          Por: <strong className="text-slate-300">{log.user?.short_name || 'Personal'}</strong>
+                        </span>
+                      </div>
+                    </div>
+                  )
+                })}
+
+                {historyResguardo.logs.length === 0 && (
+                  <p className="text-xs text-slate-500 text-center py-8">
+                    No hay registros de trazabilidad previos para este bien.
+                  </p>
+                )}
+              </div>
             </div>
           </div>
         </div>
