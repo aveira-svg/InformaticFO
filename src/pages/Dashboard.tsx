@@ -4,13 +4,13 @@ import { listenPrestamosActivos, listenTodosPrestamos, getPrestamosActivos, getT
 import { listenEventosAgenda } from '../services/eventosAgenda'
 import { getEquiposByIds } from '../services/equipos'
 import type { Lugar, Prestamo, EventoAgenda, Equipo } from '../types/supabase'
-import { LocationCard } from '../components/LocationCard/LocationCard'
+import { LocationCard, type EventoConEstado } from '../components/LocationCard/LocationCard'
 import { EventLog } from '../components/EventLog/EventLog'
 import { LoanForm } from '../components/LoanForm/LoanForm'
 import { RecoverForm } from '../components/LoanForm/RecoverForm'
 import { PersonalLoanForm } from '../components/LoanForm/PersonalLoanForm'
 import { PersonalLoanCard, type PersonalLoanGroup } from '../components/PersonalLoanCard/PersonalLoanCard'
-import { Bell, RefreshCw, CheckCircle, UserPlus, UserCheck } from 'lucide-react'
+import { Bell, RefreshCw, CheckCircle, UserPlus, UserCheck, CalendarDays } from 'lucide-react'
 
 export default function Dashboard() {
   const [lugares, setLugares] = useState<Lugar[]>([])
@@ -38,7 +38,6 @@ export default function Dashboard() {
     }
   }, [])
 
-  // Actualizar hora cada minuto
   useEffect(() => {
     const interval = setInterval(() => {
       setCurrentTime(new Date())
@@ -46,7 +45,6 @@ export default function Dashboard() {
     return () => clearInterval(interval)
   }, [])
 
-  // Solicitar permiso de notificaciones
   useEffect(() => {
     if ('Notification' in window) {
       setNotificationPermission(Notification.permission)
@@ -64,8 +62,6 @@ export default function Dashboard() {
       setNotificationPermission(permission)
     }
   }
-
-
 
   const handleRefresh = async () => {
     try {
@@ -89,11 +85,9 @@ export default function Dashboard() {
     }
   }
 
-  // Toggle ON/OFF persistido en Supabase — NO afecta la visibilidad de la tarjeta
   const [togglingId, setTogglingId] = useState<string | null>(null)
   const handleToggleActivo = async (lugarId: string, currentDisponible: boolean) => {
     setTogglingId(lugarId)
-    // Actualización optimista en memoria
     setLugares((prev) =>
       prev.map((l) => (l.id === lugarId ? { ...l, disponible: !currentDisponible } : l))
     )
@@ -101,7 +95,6 @@ export default function Dashboard() {
       await setDisponibleLugar(lugarId, !currentDisponible)
     } catch (err) {
       console.error('Error toggling disponible:', err)
-      // Revertir en caso de error
       setLugares((prev) =>
         prev.map((l) => (l.id === lugarId ? { ...l, disponible: currentDisponible } : l))
       )
@@ -130,7 +123,6 @@ export default function Dashboard() {
     setSelectedLugarId(null);
   };
 
-  // Notificaciones para eventos de hoy
   useEffect(() => {
     if (!('Notification' in window) || Notification.permission !== 'granted') {
       return
@@ -140,17 +132,13 @@ export default function Dashboard() {
 
     const checkEventos = () => {
       const ahora = new Date()
-      const hoyInicio = new Date(ahora)
-      hoyInicio.setHours(0, 0, 0, 0)
-      const hoyFin = new Date(ahora)
-      hoyFin.setHours(23, 59, 59, 999)
+      const yyyy = ahora.getFullYear()
+      const mm = String(ahora.getMonth() + 1).padStart(2, '0')
+      const dd = String(ahora.getDate()).padStart(2, '0')
+      const hoyStr = `${yyyy}-${mm}-${dd}`
 
       eventosAgenda.forEach((evento) => {
-        if (!evento.fecha) return
-        const [year, month, day] = evento.fecha.split('-').map(Number)
-        const fechaEvento = new Date(year, month - 1, day)
-
-        if (fechaEvento < hoyInicio || fechaEvento > hoyFin) return
+        if (!evento.fecha || evento.fecha !== hoyStr) return
 
         const lugar = lugares.find((l) => l.id === evento.lugar_id)
         if (!lugar) return
@@ -158,11 +146,8 @@ export default function Dashboard() {
         const [horaInicioH, horaInicioM] = (evento.hora_inicio || '00:00').split(':').map(Number)
         const [horaFinH, horaFinM] = (evento.hora_fin || '00:00').split(':').map(Number)
 
-        const inicioEvento = new Date(fechaEvento)
-        inicioEvento.setHours(horaInicioH, horaInicioM, 0, 0)
-
-        const finEvento = new Date(fechaEvento)
-        finEvento.setHours(horaFinH, horaFinM, 0, 0)
+        const inicioEvento = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate(), horaInicioH, horaInicioM, 0)
+        const finEvento = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate(), horaFinH, horaFinM, 0)
 
         const alertaInicio = new Date(inicioEvento.getTime() - 20 * 60 * 1000)
         const margenAlerta = 60000
@@ -200,7 +185,6 @@ export default function Dashboard() {
     return () => clearInterval(interval)
   }, [eventosAgenda, lugares])
 
-  // Obtener equipos por IDs
   useEffect(() => {
     const ids = Array.from(new Set(prestamos.filter((p) => p.estado === 'prestado').map((p) => p.equipo_id)))
     if (!ids.length) {
@@ -214,7 +198,6 @@ export default function Dashboard() {
     p.lugar_id === '00000000-0000-0000-0000-000000000000' ||
     Boolean(p.observaciones?.startsWith('[PERSONAL]'))
 
-  // Resumen por lugar
   const resumenPorLugar = useMemo(() => {
     const map = new Map<string, { prestados: number; vencidos: number }>()
     for (const l of lugares) map.set(l.id, { prestados: 0, vencidos: 0 })
@@ -232,7 +215,6 @@ export default function Dashboard() {
     return map
   }, [lugares, prestamos])
 
-  // Préstamos directos / personales (no vinculados a un lugar de la lista)
   const personalLoanGroups = useMemo(() => {
     const personalLoans = prestamos.filter(
       (p) => p.estado === 'prestado' && isPersonalLoan(p)
@@ -263,60 +245,59 @@ export default function Dashboard() {
     return Array.from(groupsMap.values())
   }, [prestamos, equiposMap])
 
-  // Eventos por lugar
   const eventosPorLugar = useMemo(() => {
-    const map = new Map<string, { evento: EventoAgenda; estado: 'proximo' | 'en_curso' | 'vencido' } | null>()
+    const map = new Map<string, { eventos: EventoConEstado[]; eventoAlerta: EventoConEstado | null }>()
     const ahora = currentTime
-    const hoyInicio = new Date(ahora)
-    hoyInicio.setHours(0, 0, 0, 0)
-    const hoyFin = new Date(ahora)
-    hoyFin.setHours(23, 59, 59, 999)
+    const yyyy = ahora.getFullYear()
+    const mm = String(ahora.getMonth() + 1).padStart(2, '0')
+    const dd = String(ahora.getDate()).padStart(2, '0')
+    const hoyStr = `${yyyy}-${mm}-${dd}`
 
     for (const l of lugares) {
-      const eventosDelLugar = eventosAgenda.filter((e) => {
-        if (!e.fecha) return false
-        const [year, month, day] = e.fecha.split('-').map(Number)
-        const fechaEvento = new Date(year, month - 1, day)
-        return fechaEvento >= hoyInicio && fechaEvento <= hoyFin && e.lugar_id === l.id
-      })
+      const eventosDelLugar = eventosAgenda
+        .filter((e) => e.fecha === hoyStr && e.lugar_id === l.id)
+        .sort((a, b) => (a.hora_inicio || '').localeCompare(b.hora_inicio || ''))
 
-      let eventoRelevante: { evento: EventoAgenda; estado: 'proximo' | 'en_curso' | 'vencido' } | null = null
-
-      for (const evento of eventosDelLugar) {
-        const [year, month, day] = evento.fecha.split('-').map(Number)
-        const fechaEvento = new Date(year, month - 1, day)
+      const eventosConEstado: EventoConEstado[] = eventosDelLugar.map((evento) => {
         const [horaInicioH, horaInicioM] = (evento.hora_inicio || '00:00').split(':').map(Number)
         const [horaFinH, horaFinM] = (evento.hora_fin || '00:00').split(':').map(Number)
 
-        const inicioEvento = new Date(fechaEvento)
-        inicioEvento.setHours(horaInicioH, horaInicioM, 0, 0)
-
-        const finEvento = new Date(fechaEvento)
-        finEvento.setHours(horaFinH, horaFinM, 0, 0)
-
+        const inicioEvento = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate(), horaInicioH, horaInicioM, 0)
+        const finEvento = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate(), horaFinH, horaFinM, 0)
         const inicioAlerta = new Date(inicioEvento.getTime() - 20 * 60 * 1000)
+        const margenApagar = new Date(finEvento.getTime() + 45 * 60 * 1000)
 
-        if (ahora >= inicioAlerta && ahora < inicioEvento && l.activo) {
-          eventoRelevante = { evento, estado: 'proximo' }
-          break
+        let estado: 'programado' | 'proximo' | 'en_curso' | 'vencido' | 'finalizado' = 'programado'
+
+        if (ahora >= inicioAlerta && ahora < inicioEvento) {
+          estado = 'proximo'
         } else if (ahora >= inicioEvento && ahora <= finEvento) {
-          eventoRelevante = { evento, estado: 'en_curso' }
-          break
-        } else if (ahora > finEvento && l.activo) {
-          if (!eventoRelevante) {
-            eventoRelevante = { evento, estado: 'vencido' }
-          }
+          estado = 'en_curso'
+        } else if (ahora > finEvento && ahora <= margenApagar) {
+          estado = 'vencido'
+        } else if (ahora > margenApagar) {
+          estado = 'finalizado'
+        } else {
+          estado = 'programado'
         }
-      }
 
-      map.set(l.id, eventoRelevante)
+        return { evento, estado }
+      })
+
+      const eventoAlerta =
+        eventosConEstado.find((e) => e.estado === 'en_curso') ||
+        eventosConEstado.find((e) => e.estado === 'proximo') ||
+        eventosConEstado.find((e) => e.estado === 'vencido') ||
+        eventosConEstado.find((e) => e.estado === 'programado') ||
+        eventosConEstado[0] ||
+        null
+
+      map.set(l.id, { eventos: eventosConEstado, eventoAlerta })
     }
 
     return map
   }, [lugares, eventosAgenda, currentTime])
 
-  // Ordenar lugares visibles (activo=true según Configuración → botón "Visible")
-  // El toggle ON/OFF de la tarjeta es local y NO filtra aquí
   const lugaresFiltrados = useMemo(() => {
     const visibles = lugares.filter((l) => l.activo)
     const frecuenciaPorLugar = new Map<string, number>()
@@ -325,13 +306,21 @@ export default function Dashboard() {
     }
 
     return [...visibles].sort((a, b) => {
-      const eventoA = eventosPorLugar.get(a.id)
-      const eventoB = eventosPorLugar.get(b.id)
-      const tieneAlertaA = eventoA && (eventoA.estado === 'proximo' || eventoA.estado === 'vencido')
-      const tieneAlertaB = eventoB && (eventoB.estado === 'proximo' || eventoB.estado === 'vencido')
+      const infoA = eventosPorLugar.get(a.id)
+      const infoB = eventosPorLugar.get(b.id)
 
-      if (tieneAlertaA && !tieneAlertaB) return -1
-      if (!tieneAlertaA && tieneAlertaB) return 1
+      const getEventScore = (info?: { eventos: EventoConEstado[] }) => {
+        if (!info || info.eventos.length === 0) return 0
+        if (info.eventos.some((e) => e.estado === 'en_curso')) return 4
+        if (info.eventos.some((e) => e.estado === 'proximo')) return 3
+        if (info.eventos.some((e) => e.estado === 'vencido')) return 2
+        if (info.eventos.some((e) => e.estado === 'programado')) return 1
+        return 0
+      }
+
+      const scoreA = getEventScore(infoA)
+      const scoreB = getEventScore(infoB)
+      if (scoreA !== scoreB) return scoreB - scoreA
 
       const tienePrestadosA = (resumenPorLugar.get(a.id)?.prestados || 0) > 0
       const tienePrestadosB = (resumenPorLugar.get(b.id)?.prestados || 0) > 0
@@ -349,9 +338,17 @@ export default function Dashboard() {
     return prestamos.filter((p) => p.estado === 'prestado').length
   }, [prestamos])
 
+  const totalEventosHoyCount = useMemo(() => {
+    const ahora = currentTime
+    const yyyy = ahora.getFullYear()
+    const mm = String(ahora.getMonth() + 1).padStart(2, '0')
+    const dd = String(ahora.getDate()).padStart(2, '0')
+    const hoyStr = `${yyyy}-${mm}-${dd}`
+    return eventosAgenda.filter((e) => e.fecha === hoyStr).length
+  }, [eventosAgenda, currentTime])
+
   return (
     <div className="space-y-6">
-      {/* Alerta de Notificaciones */}
       {notificationPermission !== 'granted' && eventosAgenda.length > 0 && (
         <div className="card bg-amber-950/40 border border-amber-800/60 p-4 rounded-xl flex items-center justify-between gap-3 text-amber-200">
           <div className="flex items-center gap-3">
@@ -370,8 +367,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Métricas Principales */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
         <div className="card bg-slate-900/90 border border-slate-800 p-4 rounded-xl flex items-center gap-3">
           <div className="p-3 bg-cyan-500/10 text-cyan-400 rounded-lg border border-cyan-500/20">
             <RefreshCw className="size-6" />
@@ -383,7 +379,17 @@ export default function Dashboard() {
         </div>
 
         <div className="card bg-slate-900/90 border border-slate-800 p-4 rounded-xl flex items-center gap-3">
-          <div className="p-3 bg-cyan-500/10 text-cyan-400 rounded-lg border border-cyan-500/20">
+          <div className="p-3 bg-indigo-500/10 text-indigo-400 rounded-lg border border-indigo-500/20">
+            <CalendarDays className="size-6" />
+          </div>
+          <div>
+            <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">Eventos de Hoy</p>
+            <p className="text-2xl font-extrabold text-indigo-400">{totalEventosHoyCount}</p>
+          </div>
+        </div>
+
+        <div className="card bg-slate-900/90 border border-slate-800 p-4 rounded-xl flex items-center gap-3">
+          <div className="p-3 bg-emerald-500/10 text-emerald-400 rounded-lg border border-emerald-500/20">
             <CheckCircle className="size-6" />
           </div>
           <div>
@@ -393,14 +399,10 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Grid de Lugares */}
       <div className="space-y-3">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2">
             <span>Ubicaciones e Infraestructura Visibles</span>
-            <span className="text-xs px-2 py-0.5 bg-slate-800 text-cyan-400 rounded-full border border-slate-700">
-              {lugaresFiltrados.length}
-            </span>
           </h2>
           <button
             onClick={() => setShowPersonalForm(true)}
@@ -415,8 +417,7 @@ export default function Dashboard() {
           {lugaresFiltrados.map((l) => {
             const resumen = resumenPorLugar.get(l.id) || { prestados: 0, vencidos: 0 }
             const tienePrestados = resumen.prestados > 0
-            const eventoInfo = eventosPorLugar.get(l.id)
-            // disponible: estado operativo ON/OFF persistido en Supabase
+            const eventosInfo = eventosPorLugar.get(l.id)
             const estaDisponible = l.disponible ?? true
 
             return (
@@ -430,7 +431,8 @@ export default function Dashboard() {
                 prestados={prestamos
                   .filter((p) => p.lugar_id === l.id && p.estado === 'prestado')
                   .map((p) => equiposMap.get(p.equipo_id)?.codigo_unico || p.equipo_id)}
-                eventoAgenda={eventoInfo}
+                eventosDelDia={eventosInfo?.eventos || []}
+                eventoAgenda={eventosInfo?.eventoAlerta || null}
                 disabledButtons={togglingId === l.id}
                 onToggleActivo={() => handleToggleActivo(l.id, estaDisponible)}
                 onPrestar={() => handlePrestar(l.id)}
@@ -441,16 +443,12 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Sección Préstamos Directos a Personal */}
       {personalLoanGroups.length > 0 && (
         <div className="space-y-3 pt-2">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-bold text-indigo-300 flex items-center gap-2">
               <UserCheck className="size-5 text-indigo-400" />
               <span>Únicos Préstamos</span>
-              <span className="text-xs px-2 py-0.5 bg-indigo-950 text-indigo-300 rounded-full border border-indigo-800">
-                {personalLoanGroups.length}
-              </span>
             </h2>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
@@ -466,23 +464,6 @@ export default function Dashboard() {
       )}
 
       {/* Modales */}
-      {showPersonalForm && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-md card bg-slate-900 border border-slate-800 p-5 rounded-xl text-slate-100 shadow-2xl animate-in">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-2 mb-4">
-              <h3 className="font-bold text-slate-100 text-base">Registrar Único Préstamo</h3>
-              <button className="text-slate-400 hover:text-white cursor-pointer" onClick={() => setShowPersonalForm(false)}>
-                ✕
-              </button>
-            </div>
-            <PersonalLoanForm
-              onClose={() => setShowPersonalForm(false)}
-              onSuccess={handleRefresh}
-              fallbackLugarId={lugares[0]?.id}
-            />
-          </div>
-        </div>
-      )}
       {showForm && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="w-full max-w-md card bg-slate-900 border border-slate-800 p-5 rounded-xl text-slate-100 shadow-2xl animate-in">
@@ -517,6 +498,24 @@ export default function Dashboard() {
         </div>
       )}
 
+      {showPersonalForm && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-md card bg-slate-900 border border-slate-800 p-5 rounded-xl text-slate-100 shadow-2xl animate-in">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-2 mb-4">
+              <h3 className="font-bold text-slate-100 text-base">Registrar Único Préstamo</h3>
+              <button className="text-slate-400 hover:text-white cursor-pointer" onClick={() => setShowPersonalForm(false)}>
+                ✕
+              </button>
+            </div>
+            <PersonalLoanForm
+              onClose={() => setShowPersonalForm(false)}
+              onSuccess={handleRefresh}
+              fallbackLugarId={lugares[0]?.id}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Bitácora de Eventos */}
       <div>
         <EventLog />
@@ -524,3 +523,4 @@ export default function Dashboard() {
     </div>
   )
 }
+
