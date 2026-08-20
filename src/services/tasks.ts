@@ -152,7 +152,33 @@ export async function addTaskUpdate(taskId: string, updateText: string, createdB
   }
 }
 
-// Escuchar actualizaciones de una tarea
+// Escuchar todas las actualizaciones para contadores en tiempo real
+export function listenAllTaskUpdates(cb: (updates: { id: string; task_id: string }[]) => void) {
+  const fetchAll = () => {
+    supabase
+      .from('task_updates')
+      .select('id, task_id')
+      .then(({ data, error }) => {
+        if (!error && data) {
+          cb(data)
+        }
+      })
+  }
+
+  fetchAll()
+
+  const channelId = 'all_task_updates_' + Math.random().toString(36).substring(2, 9)
+  const channel = supabase
+    .channel(channelId)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'task_updates' }, () => fetchAll())
+    .subscribe()
+
+  return () => {
+    supabase.removeChannel(channel)
+  }
+}
+
+// Escuchar actualizaciones de una tarea específica
 export function listenTaskUpdates(taskId: string, cb: (updates: any[]) => void) {
   const fetchUpdates = () => {
     supabase

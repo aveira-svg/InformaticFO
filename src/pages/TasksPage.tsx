@@ -10,6 +10,7 @@ import {
   listenPendingTasks,
   listenCompletedTasks,
   listenTaskUpdates,
+  listenAllTaskUpdates,
 } from '../services/tasks'
 import type { Profile, Lugar } from '../types/supabase'
 import { Calendar, CheckCircle2, MessageSquare, Plus, Trash2, User, AlertTriangle, ClipboardList, MapPin } from 'lucide-react'
@@ -20,6 +21,7 @@ export default function TasksPage() {
   const [lugares, setLugares] = useState<Lugar[]>([])
   const [pendingTasks, setPendingTasks] = useState<any[]>([])
   const [completedTasks, setCompletedTasks] = useState<any[]>([])
+  const [allUpdates, setAllUpdates] = useState<{ id: string; task_id: string }[]>([])
 
   // Modal agregar tarea
   const [showAddForm, setShowAddForm] = useState(false)
@@ -46,11 +48,13 @@ export default function TasksPage() {
     const offLugares = listenLugares(setLugares)
     const offPending = listenPendingTasks(setPendingTasks)
     const offCompleted = listenCompletedTasks(setCompletedTasks)
+    const offAllUpdates = listenAllTaskUpdates(setAllUpdates)
     return () => {
       offProfiles()
       offLugares()
       offPending()
       offCompleted()
+      offAllUpdates()
     }
   }, [])
 
@@ -83,6 +87,14 @@ export default function TasksPage() {
     lugares.forEach((l) => m.set(l.id, l))
     return m
   }, [lugares])
+
+  const taskUpdatesCountMap = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const up of allUpdates) {
+      m.set(up.task_id, (m.get(up.task_id) || 0) + 1)
+    }
+    return m
+  }, [allUpdates])
 
   const esTareaVieja = (createdAtStr: string) => {
     const createdDate = new Date(createdAtStr)
@@ -188,6 +200,7 @@ export default function TasksPage() {
               const userNames = task.assignments?.map((a: any) => profilesMap.get(a.user_id)?.short_name || 'Desconocido') || []
               const lugarNombre = task.lugar?.nombre || lugaresMap.get(task.lugar_id)?.nombre || task.title || 'Ubicación General'
               const detalleText = task.subtitle || task.description
+              const countUpdates = taskUpdatesCountMap.get(task.id) || 0
 
               return (
                 <div
@@ -250,7 +263,7 @@ export default function TasksPage() {
                       onClick={() => setActiveUpdatesTaskId(activeUpdatesTaskId === task.id ? null : task.id)}
                     >
                       <MessageSquare className="size-3.5" />
-                      <span>Comentarios / Avances ({taskUpdates.length})</span>
+                      <span>Comentarios / Avances ({countUpdates})</span>
                     </button>
 
                     {activeUpdatesTaskId === task.id && (

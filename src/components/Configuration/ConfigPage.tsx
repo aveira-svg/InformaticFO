@@ -53,6 +53,9 @@ export default function ConfigPage() {
   const [newUserRole, setNewUserRole] = useState<'admin' | 'user'>('user')
   const [creatingUser, setCreatingUser] = useState(false)
   const [userError, setUserError] = useState('')
+  const [editingUserId, setEditingUserId] = useState<string | null>(null)
+  const [editShortName, setEditShortName] = useState('')
+  const [savingShortName, setSavingShortName] = useState(false)
 
   // Papelera de reciclaje
   const [deletedRecords, setDeletedRecords] = useState<DeletedRecord[]>([])
@@ -270,6 +273,25 @@ export default function ConfigPage() {
     }
   }
 
+  // Actualizar nombre corto de usuario activo
+  async function onUpdateShortName(e: React.FormEvent, userId: string) {
+    e.preventDefault()
+    if (!editShortName.trim()) return
+    setSavingShortName(true)
+    try {
+      await updateProfile(userId, { short_name: editShortName.trim() })
+      setEditingUserId(null)
+      setEditShortName('')
+      const fresh = await getProfiles()
+      setProfiles(fresh)
+    } catch (err) {
+      console.error(err)
+      alert('Error al actualizar nombre corto')
+    } finally {
+      setSavingShortName(false)
+    }
+  }
+
   // Restaurar registro
   async function handleRestore(rec: DeletedRecord) {
     try {
@@ -291,6 +313,14 @@ export default function ConfigPage() {
       alert('Error al restaurar el registro.')
     }
   }
+
+  const lugaresOrdenados = React.useMemo(() => {
+    return [...lugares].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }))
+  }, [lugares])
+
+  const tiposOrdenados = React.useMemo(() => {
+    return [...tiposEquipo].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }))
+  }, [tiposEquipo])
 
   const equiposPrestamo = equipos.filter((e) => e.historico !== true)
 
@@ -404,9 +434,9 @@ export default function ConfigPage() {
           </form>
 
           <div className="border-t border-slate-800 pt-4 space-y-2">
-            <h4 className="text-xs font-semibold text-slate-400 uppercase">Lugares Registrados</h4>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {lugares.map((l) => (
+            <h4 className="text-xs font-semibold text-slate-400 uppercase">Lugares Registrados (Orden Alfabético)</h4>
+            <div className="grid grid-cols-1 gap-2">
+              {lugaresOrdenados.map((l) => (
                 <div
                   key={l.id}
                   className="p-3 bg-slate-950 border border-slate-800 rounded-lg flex items-center justify-between text-xs"
@@ -820,7 +850,7 @@ export default function ConfigPage() {
           </form>
 
           <div className="border-t border-slate-800 pt-3 space-y-2">
-            {tiposEquipo.map((t) => (
+            {tiposOrdenados.map((t) => (
               <div key={t.id} className="p-2.5 bg-slate-950 border border-slate-800 rounded flex justify-between items-center text-xs">
                 {editingTipo?.id === t.id ? (
                   <form onSubmit={onUpdateTipo} className="flex-1 flex items-center gap-2">
@@ -950,21 +980,64 @@ export default function ConfigPage() {
             <h4 className="text-xs font-semibold text-slate-400 uppercase">Usuarios Activos en el Sistema</h4>
             <div className="divide-y divide-slate-800/80 border border-slate-800 rounded-xl overflow-hidden bg-slate-950">
               {profiles.map((p) => (
-                <div key={p.id} className="p-3 flex items-center justify-between text-xs">
-                  <div>
-                    <p className="font-semibold text-slate-200">
-                      {p.short_name} <span className="text-slate-500">({p.email})</span>
-                    </p>
-                    <span
-                      className={`text-[10px] px-2 py-0.5 rounded font-mono uppercase font-bold ${
-                        p.role === 'admin'
-                          ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20'
-                          : 'bg-slate-800 text-slate-400'
-                      }`}
-                    >
-                      {p.role}
-                    </span>
-                  </div>
+                <div key={p.id} className="p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                  {editingUserId === p.id ? (
+                    <form onSubmit={(e) => onUpdateShortName(e, p.id)} className="flex items-center gap-2 flex-1 max-w-md">
+                      <input
+                        type="text"
+                        required
+                        className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-100 outline-none focus:border-cyan-500 flex-1"
+                        value={editShortName}
+                        onChange={(e) => setEditShortName(e.target.value)}
+                        placeholder="Nombre corto..."
+                      />
+                      <button
+                        type="submit"
+                        disabled={savingShortName}
+                        className="p-1 bg-cyan-500 hover:bg-cyan-400 text-slate-950 rounded font-semibold cursor-pointer"
+                        title="Guardar nombre corto"
+                      >
+                        <Check className="size-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingUserId(null)
+                          setEditShortName('')
+                        }}
+                        className="p-1 text-slate-400 hover:text-slate-200 rounded cursor-pointer"
+                        title="Cancelar"
+                      >
+                        <X className="size-4" />
+                      </button>
+                    </form>
+                  ) : (
+                    <div>
+                      <p className="font-semibold text-slate-200 flex items-center gap-1.5">
+                        <span>{p.short_name}</span>
+                        <button
+                          onClick={() => {
+                            setEditingUserId(p.id)
+                            setEditShortName(p.short_name)
+                          }}
+                          title="Cambiar nombre corto"
+                          className="text-slate-500 hover:text-cyan-300 p-0.5 rounded cursor-pointer transition-colors"
+                        >
+                          <Pencil className="size-3.5" />
+                        </button>
+                        <span className="text-slate-500 font-normal">({p.email})</span>
+                      </p>
+                      <span
+                        className={`text-[10px] px-2 py-0.5 rounded font-mono uppercase font-bold ${
+                          p.role === 'admin'
+                            ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20'
+                            : 'bg-slate-800 text-slate-400'
+                        }`}
+                      >
+                        {p.role}
+                      </span>
+                    </div>
+                  )}
 
                   <div className="flex items-center gap-2">
                     <button
