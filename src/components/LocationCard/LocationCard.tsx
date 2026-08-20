@@ -125,19 +125,9 @@ export function LocationCard({
 
       {/* Estado de Préstamos */}
       <div className="text-xs sm:text-sm">
-        {tieneAlertaRecuperar ? (
-          <div className="flex items-center gap-1 text-red-300 font-semibold">
-            <span>{resumen.prestados} equipo(s) prestados —</span>
-            <span className="text-red-400 font-bold uppercase">inactivo (OFF)</span>
-          </div>
-        ) : (
-          <div className="text-slate-400">
-            <span>{resumen.prestados} equipo(s) prestados — </span>
-            <strong className={activo ? 'text-emerald-400 font-bold uppercase' : 'text-slate-500 font-semibold uppercase'}>
-              {activo ? 'activo (ON)' : 'inactivo (OFF)'}
-            </strong>
-          </div>
-        )}
+        <span className={tieneAlertaRecuperar ? 'text-red-300 font-semibold' : 'text-slate-400'}>
+          {resumen.prestados} equipo(s) prestado(s)
+        </span>
       </div>
 
       {/* Tags de equipos prestados */}
