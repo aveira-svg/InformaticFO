@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import {
   listenEventosAgenda,
+  getEventosAgenda,
   addEventosAgendaRecurrentes,
   deleteEventoAgenda,
 } from '../services/eventosAgenda'
@@ -78,6 +79,14 @@ export default function AgendaPage() {
     setSelectedDate(new Date())
   }
 
+  const handleOpenAddForm = () => {
+    const yyyy = selectedDate.getFullYear()
+    const mm = String(selectedDate.getMonth() + 1).padStart(2, '0')
+    const dd = String(selectedDate.getDate()).padStart(2, '0')
+    setFecha(`${yyyy}-${mm}-${dd}`)
+    setShowAddForm(true)
+  }
+
   // Días de la semana de Lunes a Sábado
   const diasSemana = useMemo(() => {
     const current = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate())
@@ -120,26 +129,19 @@ export default function AgendaPage() {
 
   // Filtrar eventos por el período (Día o Semana de Lunes a Sábado) y lugar
   const eventosFiltrados = useMemo(() => {
-    let startRange: Date
-    let endRange: Date
-
-    if (viewMode === 'dia') {
-      startRange = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), 0, 0, 0, 0)
-      endRange = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), 23, 59, 59, 999)
-    } else {
-      startRange = new Date(diasSemana[0].dateObj)
-      startRange.setHours(0, 0, 0, 0)
-
-      endRange = new Date(diasSemana[5].dateObj)
-      endRange.setHours(23, 59, 59, 999)
-    }
+    const selYear = selectedDate.getFullYear()
+    const selMonth = String(selectedDate.getMonth() + 1).padStart(2, '0')
+    const selDay = String(selectedDate.getDate()).padStart(2, '0')
+    const selDateStr = `${selYear}-${selMonth}-${selDay}`
 
     return eventos.filter((e) => {
       if (!e.fecha) return false
-      const [year, month, day] = e.fecha.split('-').map(Number)
-      const fechaEv = new Date(year, month - 1, day, 12, 0, 0)
 
-      const matchDate = fechaEv >= startRange && fechaEv <= endRange
+      const matchDate =
+        viewMode === 'dia'
+          ? e.fecha === selDateStr
+          : diasSemana.some((d) => d.fechaStr === e.fecha)
+
       const matchLugar = !filterLugar || e.lugar_id === filterLugar
 
       return matchDate && matchLugar
@@ -224,7 +226,7 @@ export default function AgendaPage() {
 
     setSaving(true)
     try {
-      await addEventosAgendaRecurrentes(
+      const inserted = await addEventosAgendaRecurrentes(
         {
           fecha,
           hora_inicio: horaInicio,
@@ -236,6 +238,19 @@ export default function AgendaPage() {
         },
         semanasRepeticion
       )
+
+      // Actualización inmediata del estado local
+      const fresh = await getEventosAgenda()
+      if (fresh && fresh.length > 0) {
+        setEventos(fresh)
+      } else if (inserted && Array.isArray(inserted)) {
+        setEventos((prev) => [...prev, ...inserted])
+      }
+
+      // Posicionar la vista en la fecha seleccionada para verla al instante
+      const [year, month, day] = fecha.split('-').map(Number)
+      setSelectedDate(new Date(year, month - 1, day, 12, 0, 0))
+
       setShowAddForm(false)
       setTitulo('')
       setDescripcion('')
@@ -253,7 +268,10 @@ export default function AgendaPage() {
   async function handleDelete(id: string) {
     if (!confirm('¿Dar de baja esta reserva de la agenda?')) return
     try {
+      setEventos((prev) => prev.filter((e) => e.id !== id))
       await deleteEventoAgenda(id)
+      const fresh = await getEventosAgenda()
+      if (fresh) setEventos(fresh)
     } catch (err) {
       console.error(err)
       alert('Error al eliminar la reserva')
@@ -272,7 +290,7 @@ export default function AgendaPage() {
           <p className="text-xs text-slate-400 mt-0.5">Planificación de clases, mantenimientos y reservas de infraestructura</p>
         </div>
         <button
-          onClick={() => setShowAddForm(true)}
+          onClick={handleOpenAddForm}
           className="btn bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold text-xs py-2.5 px-4 rounded-lg inline-flex items-center gap-2 cursor-pointer shadow-lg shadow-cyan-500/20"
         >
           <Plus className="size-4" />

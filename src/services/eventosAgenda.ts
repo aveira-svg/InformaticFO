@@ -1,22 +1,26 @@
 import { supabase } from './supabaseClient'
 import type { EventoAgenda } from '../types/supabase'
 
+// Obtener reservas de agenda directamente
+export async function getEventosAgenda(): Promise<EventoAgenda[]> {
+  const { data, error } = await supabase
+    .from('eventos_agenda')
+    .select('*')
+    .eq('is_deleted', false)
+    .order('fecha', { ascending: true })
+    .order('hora_inicio', { ascending: true })
+
+  if (error || !data) {
+    console.error('Error fetching eventos_agenda:', error)
+    return []
+  }
+  return data
+}
+
 // Escuchar reservas de agenda en tiempo real
 export function listenEventosAgenda(cb: (eventos: EventoAgenda[]) => void) {
   const fetchAgenda = () => {
-    supabase
-      .from('eventos_agenda')
-      .select('*')
-      .eq('is_deleted', false)
-      .order('fecha', { ascending: true })
-      .order('hora_inicio', { ascending: true })
-      .then(({ data, error }) => {
-        if (!error && data) {
-          cb(data)
-        } else if (error) {
-          console.error('Error fetching eventos_agenda:', error)
-        }
-      })
+    getEventosAgenda().then(cb)
   }
 
   fetchAgenda()
