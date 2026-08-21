@@ -37,11 +37,20 @@ export function listenEventosAgenda(cb: (eventos: EventoAgenda[]) => void) {
     )
     .subscribe()
 
-  // Refresco periódico cada 10 segundos para garantizar sincronización perfecta
-  const timer = setInterval(fetchAgenda, 10000)
+  // Refresco periódico cada 5 segundos para sincronización entre dispositivos
+  const timer = setInterval(fetchAgenda, 5000)
+  const onFocus = () => fetchAgenda()
+  if (typeof window !== 'undefined') {
+    window.addEventListener('focus', onFocus)
+    window.addEventListener('visibilitychange', onFocus)
+  }
 
   return () => {
     clearInterval(timer)
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('focus', onFocus)
+      window.removeEventListener('visibilitychange', onFocus)
+    }
     supabase.removeChannel(channel)
   }
 }

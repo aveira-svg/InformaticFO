@@ -12,7 +12,7 @@ export async function getLugares(): Promise<Lugar[]> {
   return data
 }
 
-// Escuchar lugares en tiempo real
+// Escuchar lugares en tiempo real con refresco continuo entre dispositivos
 export function listenLugares(cb: (lugares: Lugar[]) => void) {
   const fetchLugares = () => {
     supabase
@@ -43,7 +43,20 @@ export function listenLugares(cb: (lugares: Lugar[]) => void) {
     )
     .subscribe()
 
+  // Sondeo preventivo cada 5 segundos para sincronización entre dispositivos
+  const timer = setInterval(fetchLugares, 5000)
+  const onFocus = () => fetchLugares()
+  if (typeof window !== 'undefined') {
+    window.addEventListener('focus', onFocus)
+    window.addEventListener('visibilitychange', onFocus)
+  }
+
   return () => {
+    clearInterval(timer)
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('focus', onFocus)
+      window.removeEventListener('visibilitychange', onFocus)
+    }
     supabase.removeChannel(channel)
   }
 }

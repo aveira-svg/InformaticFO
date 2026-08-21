@@ -25,7 +25,7 @@ export async function getTodosPrestamos(): Promise<Prestamo[]> {
   return data
 }
 
-// Escuchar préstamos activos en tiempo real (estado = 'prestado')
+// Escuchar préstamos activos en tiempo real (estado = 'prestado') con refresco continuo
 export function listenPrestamosActivos(cb: (prestamos: Prestamo[]) => void) {
   const fetchActivos = () => {
     supabase
@@ -57,12 +57,25 @@ export function listenPrestamosActivos(cb: (prestamos: Prestamo[]) => void) {
     )
     .subscribe()
 
+  // Sondeo preventivo cada 5 segundos para sincronización entre dispositivos
+  const timer = setInterval(fetchActivos, 5000)
+  const onFocus = () => fetchActivos()
+  if (typeof window !== 'undefined') {
+    window.addEventListener('focus', onFocus)
+    window.addEventListener('visibilitychange', onFocus)
+  }
+
   return () => {
+    clearInterval(timer)
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('focus', onFocus)
+      window.removeEventListener('visibilitychange', onFocus)
+    }
     supabase.removeChannel(channel)
   }
 }
 
-// Escuchar todos los préstamos en tiempo real (para estadísticas e historial)
+// Escuchar todos los préstamos en tiempo real con refresco continuo
 export function listenTodosPrestamos(cb: (prestamos: Prestamo[]) => void) {
   const fetchTodos = () => {
     supabase
@@ -93,7 +106,20 @@ export function listenTodosPrestamos(cb: (prestamos: Prestamo[]) => void) {
     )
     .subscribe()
 
+  // Sondeo preventivo cada 5 segundos para sincronización entre dispositivos
+  const timer = setInterval(fetchTodos, 5000)
+  const onFocus = () => fetchTodos()
+  if (typeof window !== 'undefined') {
+    window.addEventListener('focus', onFocus)
+    window.addEventListener('visibilitychange', onFocus)
+  }
+
   return () => {
+    clearInterval(timer)
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('focus', onFocus)
+      window.removeEventListener('visibilitychange', onFocus)
+    }
     supabase.removeChannel(channel)
   }
 }

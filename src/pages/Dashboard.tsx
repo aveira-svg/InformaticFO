@@ -38,11 +38,37 @@ export default function Dashboard() {
     }
   }, [])
 
+  // Sincronizar catálogo de equipos con préstamos activos
+  useEffect(() => {
+    const ids = Array.from(new Set(prestamos.map((item) => item.equipo_id)))
+    if (ids.length) {
+      getEquiposByIds(ids).then(setEquiposMap)
+    } else {
+      setEquiposMap(new Map())
+    }
+  }, [prestamos])
+
+  // Intervalo de evaluación de franjas horarias y estados cada 5s
   useEffect(() => {
     const interval = setInterval(() => {
       setCurrentTime(new Date())
-    }, 10000)
+    }, 5000)
     return () => clearInterval(interval)
+  }, [])
+
+  // Sincronización inmediata al volver a la pestaña/dispositivo
+  useEffect(() => {
+    const onFocus = () => {
+      if (document.visibilityState === 'visible') {
+        handleRefresh()
+      }
+    }
+    window.addEventListener('focus', onFocus)
+    window.addEventListener('visibilitychange', onFocus)
+    return () => {
+      window.removeEventListener('focus', onFocus)
+      window.removeEventListener('visibilitychange', onFocus)
+    }
   }, [])
 
   useEffect(() => {

@@ -1,6 +1,6 @@
 import { supabase } from './supabaseClient'
 
-// Escuchar tareas pendientes en tiempo real (más antiguas primero)
+// Escuchar tareas pendientes en tiempo real (más antiguas primero) con refresco continuo
 export function listenPendingTasks(cb: (tasks: any[]) => void) {
   const fetchTasks = () => {
     supabase
@@ -31,12 +31,24 @@ export function listenPendingTasks(cb: (tasks: any[]) => void) {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'task_assignments' }, () => fetchTasks())
     .subscribe()
 
+  const timer = setInterval(fetchTasks, 5000)
+  const onFocus = () => fetchTasks()
+  if (typeof window !== 'undefined') {
+    window.addEventListener('focus', onFocus)
+    window.addEventListener('visibilitychange', onFocus)
+  }
+
   return () => {
+    clearInterval(timer)
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('focus', onFocus)
+      window.removeEventListener('visibilitychange', onFocus)
+    }
     supabase.removeChannel(channel)
   }
 }
 
-// Escuchar tareas completadas en tiempo real (más nuevas primero)
+// Escuchar tareas completadas en tiempo real (más nuevas primero) con refresco continuo
 export function listenCompletedTasks(cb: (tasks: any[]) => void) {
   const fetchCompleted = () => {
     supabase
@@ -67,7 +79,19 @@ export function listenCompletedTasks(cb: (tasks: any[]) => void) {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'task_assignments' }, () => fetchCompleted())
     .subscribe()
 
+  const timer = setInterval(fetchCompleted, 5000)
+  const onFocus = () => fetchCompleted()
+  if (typeof window !== 'undefined') {
+    window.addEventListener('focus', onFocus)
+    window.addEventListener('visibilitychange', onFocus)
+  }
+
   return () => {
+    clearInterval(timer)
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('focus', onFocus)
+      window.removeEventListener('visibilitychange', onFocus)
+    }
     supabase.removeChannel(channel)
   }
 }
@@ -152,7 +176,7 @@ export async function addTaskUpdate(taskId: string, updateText: string, createdB
   }
 }
 
-// Escuchar todas las actualizaciones para contadores en tiempo real
+// Escuchar todas las actualizaciones para contadores en tiempo real con refresco continuo
 export function listenAllTaskUpdates(cb: (updates: { id: string; task_id: string }[]) => void) {
   const fetchAll = () => {
     supabase
@@ -173,12 +197,24 @@ export function listenAllTaskUpdates(cb: (updates: { id: string; task_id: string
     .on('postgres_changes', { event: '*', schema: 'public', table: 'task_updates' }, () => fetchAll())
     .subscribe()
 
+  const timer = setInterval(fetchAll, 5000)
+  const onFocus = () => fetchAll()
+  if (typeof window !== 'undefined') {
+    window.addEventListener('focus', onFocus)
+    window.addEventListener('visibilitychange', onFocus)
+  }
+
   return () => {
+    clearInterval(timer)
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('focus', onFocus)
+      window.removeEventListener('visibilitychange', onFocus)
+    }
     supabase.removeChannel(channel)
   }
 }
 
-// Escuchar actualizaciones de una tarea específica
+// Escuchar actualizaciones de una tarea específica con refresco continuo
 export function listenTaskUpdates(taskId: string, cb: (updates: any[]) => void) {
   const fetchUpdates = () => {
     supabase
@@ -198,13 +234,25 @@ export function listenTaskUpdates(taskId: string, cb: (updates: any[]) => void) 
 
   fetchUpdates()
 
-  const channelId = `task_updates_${taskId}_` + Math.random().toString(36).substring(2, 9)
+  const channelId = 'task_updates_' + taskId + '_' + Math.random().toString(36).substring(2, 9)
   const channel = supabase
     .channel(channelId)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'task_updates', filter: `task_id=eq.${taskId}` }, () => fetchUpdates())
     .subscribe()
 
+  const timer = setInterval(fetchUpdates, 5000)
+  const onFocus = () => fetchUpdates()
+  if (typeof window !== 'undefined') {
+    window.addEventListener('focus', onFocus)
+    window.addEventListener('visibilitychange', onFocus)
+  }
+
   return () => {
+    clearInterval(timer)
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('focus', onFocus)
+      window.removeEventListener('visibilitychange', onFocus)
+    }
     supabase.removeChannel(channel)
   }
 }
