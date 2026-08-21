@@ -17,7 +17,7 @@ export async function getEventosAgenda(): Promise<EventoAgenda[]> {
   return data
 }
 
-// Escuchar reservas de agenda en tiempo real
+// Escuchar reservas de agenda en tiempo real y con refresco preventivo
 export function listenEventosAgenda(cb: (eventos: EventoAgenda[]) => void) {
   const fetchAgenda = () => {
     getEventosAgenda().then(cb)
@@ -37,7 +37,11 @@ export function listenEventosAgenda(cb: (eventos: EventoAgenda[]) => void) {
     )
     .subscribe()
 
+  // Refresco periódico cada 10 segundos para garantizar sincronización perfecta
+  const timer = setInterval(fetchAgenda, 10000)
+
   return () => {
+    clearInterval(timer)
     supabase.removeChannel(channel)
   }
 }

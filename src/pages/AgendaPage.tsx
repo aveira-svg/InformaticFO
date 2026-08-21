@@ -18,17 +18,24 @@ import {
   CalendarDays,
 } from 'lucide-react'
 
+function getLocalDateString(d: Date = new Date()): string {
+  const yyyy = d.getFullYear()
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  return `${yyyy}-${mm}-${dd}`
+}
+
 export default function AgendaPage() {
   const [eventos, setEventos] = useState<EventoAgenda[]>([])
   const [lugares, setLugares] = useState<Lugar[]>([])
 
   // Control de vista y navegación de fecha (Por defecto: Día)
   const [viewMode, setViewMode] = useState<'dia' | 'semana'>('dia')
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date())
+  const [selectedDate, setSelectedDate] = useState<Date>(() => new Date())
 
   // Formulario Modal
   const [showAddForm, setShowAddForm] = useState(false)
-  const [fecha, setFecha] = useState(new Date().toISOString().slice(0, 10))
+  const [fecha, setFecha] = useState(() => getLocalDateString(new Date()))
   const [horaInicio, setHoraInicio] = useState('08:00')
   const [horaFin, setHoraFin] = useState('10:00')
   const [lugarId, setLugarId] = useState('')
@@ -66,7 +73,7 @@ export default function AgendaPage() {
 
   // Navegación de fechas (Anterior / Siguiente / Hoy)
   const navigateDate = (amount: number) => {
-    const next = new Date(selectedDate)
+    const next = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), 12, 0, 0)
     if (viewMode === 'dia') {
       next.setDate(next.getDate() + amount)
     } else {
@@ -80,16 +87,13 @@ export default function AgendaPage() {
   }
 
   const handleOpenAddForm = () => {
-    const yyyy = selectedDate.getFullYear()
-    const mm = String(selectedDate.getMonth() + 1).padStart(2, '0')
-    const dd = String(selectedDate.getDate()).padStart(2, '0')
-    setFecha(`${yyyy}-${mm}-${dd}`)
+    setFecha(getLocalDateString(selectedDate))
     setShowAddForm(true)
   }
 
   // Días de la semana de Lunes a Sábado
   const diasSemana = useMemo(() => {
-    const current = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate())
+    const current = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), 12, 0, 0)
     const dayOfWeek = current.getDay() // 0: Dom, 1: Lun...
     const diffToMonday = (dayOfWeek === 0 ? -6 : 1) - dayOfWeek
 
@@ -102,12 +106,10 @@ export default function AgendaPage() {
     for (let i = 0; i < 6; i++) {
       const d = new Date(monday)
       d.setDate(monday.getDate() + i)
-      const yyyy = d.getFullYear()
-      const mm = String(d.getMonth() + 1).padStart(2, '0')
-      const dd = String(d.getDate()).padStart(2, '0')
+      const fechaStr = getLocalDateString(d)
       dias.push({
         nombre: nombresDias[i],
-        fechaStr: `${yyyy}-${mm}-${dd}`,
+        fechaStr,
         dateObj: d,
       })
     }
@@ -129,18 +131,16 @@ export default function AgendaPage() {
 
   // Filtrar eventos por el período (Día o Semana de Lunes a Sábado) y lugar
   const eventosFiltrados = useMemo(() => {
-    const selYear = selectedDate.getFullYear()
-    const selMonth = String(selectedDate.getMonth() + 1).padStart(2, '0')
-    const selDay = String(selectedDate.getDate()).padStart(2, '0')
-    const selDateStr = `${selYear}-${selMonth}-${selDay}`
+    const selDateStr = getLocalDateString(selectedDate)
 
     return eventos.filter((e) => {
       if (!e.fecha) return false
+      const evFecha = (e.fecha || '').slice(0, 10)
 
       const matchDate =
         viewMode === 'dia'
-          ? e.fecha === selDateStr
-          : diasSemana.some((d) => d.fechaStr === e.fecha)
+          ? evFecha === selDateStr
+          : diasSemana.some((d) => d.fechaStr === evFecha)
 
       const matchLugar = !filterLugar || e.lugar_id === filterLugar
 
@@ -174,7 +174,7 @@ export default function AgendaPage() {
 
       for (const ev of eventos) {
         if (ev.lugar_id !== lId || !ev.fecha) continue
-        const [eY, eM, eD] = ev.fecha.split('-').map(Number)
+        const [eY, eM, eD] = (ev.fecha || '').slice(0, 10).split('-').map(Number)
 
         if (eY === targetY && eM - 1 === targetM && eD === targetD) {
           const [eHInicioH, eHInicioM] = (ev.hora_inicio || '00:00').split(':').map(Number)
@@ -239,17 +239,27 @@ export default function AgendaPage() {
         semanasRepeticion
       )
 
-      // Actualización inmediata del estado local
-      const fresh = await getEventosAgenda()
-      if (fresh && fresh.length > 0) {
-        setEventos(fresh)
-      } else if (inserted && Array.isArray(inserted)) {
-        setEventos((prev) => [...prev, ...inserted])
+      // 1. Añadir inmediatamente los registros creados al estado local
+      if (inserted && Array.isArray(inserted) && inserted.length > 0) {
+        setEventos((prev) => {
+          const ids = new Set(prev.map((ev) => ev.id))
+          const nuevos = (inserted as EventoAgenda[]).filter((ev) => !ids.has(ev.id))
+          const combinados = [...prev, ...nuevos]
+          return combinados.sort((a, b) => (a.fecha || '').localeCompare(b.fecha || '') || (a.hora_inicio || '').localeCompare(b.hora_inicio || ''))
+        })
       }
 
-      // Posicionar la vista en la fecha seleccionada para verla al instante
+      // 2. Fetch directo en background para asegurar sincronización total con la BD
+      getEventosAgenda().then((fresh) => {
+        if (fresh && fresh.length > 0) {
+          setEventos(fresh)
+        }
+      })
+
+      // 3. Mover la fecha seleccionada a la fecha de la reserva y limpiar filtro de lugar
       const [year, month, day] = fecha.split('-').map(Number)
       setSelectedDate(new Date(year, month - 1, day, 12, 0, 0))
+      setFilterLugar('')
 
       setShowAddForm(false)
       setTitulo('')
