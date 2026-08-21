@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import {
   listenResguardos,
+  getResguardos,
   createResguardo,
   updateResguardo,
   deleteResguardo,
@@ -153,6 +154,24 @@ export default function EquipmentPage() {
 
       await createResguardo(id, payload)
 
+      // Actualizar inmediatamente en memoria local
+      const newItem: Resguardo = {
+        id,
+        ...payload,
+        is_deleted: false,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      } as Resguardo
+
+      setResguardos((prev) => {
+        const filtered = prev.filter((item) => item.id !== id)
+        return [...filtered, newItem].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }))
+      })
+
+      getResguardos().then((fresh) => {
+        if (fresh && fresh.length > 0) setResguardos(fresh)
+      })
+
       // Registrar en historial de trazabilidad
       const hardwareDetails = [
         payload.procesador ? `CPU: ${payload.procesador}` : null,
@@ -204,6 +223,19 @@ export default function EquipmentPage() {
       }
 
       await updateResguardo(editingResguardo.id, payload)
+
+      // Actualizar inmediatamente en memoria local
+      setResguardos((prev) =>
+        prev.map((item) =>
+          item.id === editingResguardo.id
+            ? { ...item, ...payload, updated_at: new Date().toISOString() }
+            : item
+        )
+      )
+
+      getResguardos().then((fresh) => {
+        if (fresh && fresh.length > 0) setResguardos(fresh)
+      })
 
       // Detectar cambios detallados para la bitácora
       const changes: string[] = []
@@ -277,7 +309,12 @@ export default function EquipmentPage() {
   async function handleDelete(r: Resguardo) {
     if (!confirm(`¿Dar de baja lógica al resguardo ${r.codigo_unico} — ${r.nombre}?`)) return
     try {
+      setResguardos((prev) => prev.filter((item) => item.id !== r.id))
       await deleteResguardo(r.id)
+      getResguardos().then((fresh) => {
+        if (fresh) setResguardos(fresh)
+      })
+
       await logResguardoHistory({
         resguardo_id: r.id,
         action_type: 'baja',

@@ -1,11 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import {
   listenArticulosBorrador,
+  getArticulosBorrador,
   createArticuloBorrador,
   updateArticuloBorrador,
   deleteArticuloBorrador,
   enviarPedido,
   listenPedidosEnviados,
+  getPedidosEnviados,
   getPedidoDetalles,
 } from '../services/inventarioFaltantes'
 import { useAuth } from '../services/AuthContext'
@@ -96,12 +98,21 @@ export default function InventarioFaltantesTab() {
     if (!user) return
     setSaving(true)
     try {
-      await createArticuloBorrador(user.id, {
+      const created = await createArticuloBorrador(user.id, {
         nombre: form.nombre, categoria: form.categoria, cantidad: cant,
         prioridad: form.prioridad, justificacion: form.justificacion || undefined,
         precio_estimado: form.precio_estimado ? parseFloat(form.precio_estimado) : null,
         moneda: form.moneda, proveedor: form.proveedor || undefined,
       })
+
+      // Actualizar inmediatamente estado local
+      if (created) {
+        setArticulos((prev) => [...prev, created])
+      }
+      getArticulosBorrador().then((fresh) => {
+        if (fresh) setArticulos(fresh)
+      })
+
       setForm(emptyForm())
     } catch (err: any) { setFormError(err?.message || 'Error al guardar') }
     finally { setSaving(false) }
@@ -109,7 +120,15 @@ export default function InventarioFaltantesTab() {
 
   const handleDelete = async (id: string) => {
     if (!confirm('¿Eliminar este artículo del borrador?')) return
-    await deleteArticuloBorrador(id)
+    setArticulos((prev) => prev.filter((a) => a.id !== id))
+    try {
+      await deleteArticuloBorrador(id)
+      getArticulosBorrador().then((fresh) => {
+        if (fresh) setArticulos(fresh)
+      })
+    } catch (err) {
+      console.error(err)
+    }
   }
 
   const startEdit = (a: ArticuloBorrador) => {
@@ -122,11 +141,24 @@ export default function InventarioFaltantesTab() {
   const saveEdit = async (id: string) => {
     const cant = parseInt(editForm.cantidad)
     if (!editForm.nombre.trim() || isNaN(cant) || cant < 1) return
-    await updateArticuloBorrador(id, { nombre: editForm.nombre.trim(), categoria: editForm.categoria, cantidad: cant,
+    const updateData = {
+      nombre: editForm.nombre.trim(), categoria: editForm.categoria, cantidad: cant,
       prioridad: editForm.prioridad, justificacion: editForm.justificacion || undefined,
       precio_estimado: editForm.precio_estimado ? parseFloat(editForm.precio_estimado) : null,
-      moneda: editForm.moneda, proveedor: editForm.proveedor || undefined })
+      moneda: editForm.moneda, proveedor: editForm.proveedor || undefined
+    }
+
+    setArticulos((prev) => prev.map((a) => a.id === id ? { ...a, ...updateData } : a))
     setEditingId(null)
+
+    try {
+      await updateArticuloBorrador(id, updateData)
+      getArticulosBorrador().then((fresh) => {
+        if (fresh) setArticulos(fresh)
+      })
+    } catch (err) {
+      console.error(err)
+    }
   }
 
   const handlePrint = (pedidoData?: { pedido: PedidoEnviado; items: PedidoDetalle[] }) => {
@@ -179,8 +211,14 @@ export default function InventarioFaltantesTab() {
     if (!user || !sendingSolicitante.trim()) return
     setSendingLoading(true)
     try {
-      await enviarPedido(user.id, sendingSolicitante, sendingArea, articulos)
+      const pedido = await enviarPedido(user.id, sendingSolicitante, sendingArea, articulos)
+      if (pedido) {
+        setPedidos((prev) => [pedido, ...prev])
+      }
+      setArticulos([])
       setShowSendModal(false)
+      getArticulosBorrador().then((fresh) => { if (fresh) setArticulos(fresh) })
+      getPedidosEnviados().then((fresh) => { if (fresh) setPedidos(fresh) })
     } catch (err: any) { alert('Error al enviar: ' + (err?.message || 'Error desconocido')) }
     finally { setSendingLoading(false) }
   }

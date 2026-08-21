@@ -90,25 +90,24 @@ export async function updateResguardoEstado(id: string, estado: EstadoResguardo)
   }
 }
 
-// Escuchar lista de resguardos en tiempo real
+// Obtener lista completa de resguardos directamente
+export async function getResguardos(): Promise<Resguardo[]> {
+  const { data, error } = await supabase
+    .from('resguardos')
+    .select('*')
+    .eq('is_deleted', false)
+    .order('nombre')
+
+  if (error || !data) {
+    return []
+  }
+  return data
+}
+
+// Escuchar lista de resguardos en tiempo real con refresco preventivo
 export function listenResguardos(cb: (resguardos: Resguardo[]) => void): () => void {
   const fetchResguardos = () => {
-    supabase
-      .from('resguardos')
-      .select('*')
-      .eq('is_deleted', false)
-      .order('nombre')
-      .then(({ data, error }) => {
-        if (!error && data) {
-          cb(data)
-        } else if (error) {
-          if (error.code === 'PGRST205' || String(error.message).includes('404') || String(error.code).includes('404')) {
-            cb([])
-          } else {
-            console.error('Error fetching resguardos:', error)
-          }
-        }
-      })
+    getResguardos().then(cb)
   }
 
   fetchResguardos()
@@ -125,7 +124,11 @@ export function listenResguardos(cb: (resguardos: Resguardo[]) => void): () => v
     )
     .subscribe()
 
+  // Refresco periódico cada 10 segundos
+  const timer = setInterval(fetchResguardos, 10000)
+
   return () => {
+    clearInterval(timer)
     supabase.removeChannel(channel)
   }
 }

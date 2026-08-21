@@ -1,4 +1,4 @@
-﻿import { supabase } from './supabaseClient'
+import { supabase } from './supabaseClient'
 import type {
   ArticuloBorrador,
   PedidoEnviado,
@@ -12,22 +12,25 @@ import type {
 // ARTÍCULOS BORRADOR
 // -----------------------------------------------
 
-/** Escuchar artículos del borrador activo en tiempo real */
+/** Obtener artículos del borrador activo directamente */
+export async function getArticulosBorrador(): Promise<ArticuloBorrador[]> {
+  const { data, error } = await supabase
+    .from('articulos_borrador')
+    .select('*')
+    .eq('is_deleted', false)
+    .order('created_at', { ascending: true })
+
+  if (error || !data) {
+    if (error) console.error('Error fetching articulos_borrador:', error)
+    return []
+  }
+  return data as ArticuloBorrador[]
+}
+
+/** Escuchar artículos del borrador activo en tiempo real con refresco preventivo */
 export function listenArticulosBorrador(cb: (articulos: ArticuloBorrador[]) => void): () => void {
   const fetch = () => {
-    supabase
-      .from('articulos_borrador')
-      .select('*')
-      .eq('is_deleted', false)
-      .order('created_at', { ascending: true })
-      .then(({ data, error }) => {
-        if (!error && data) {
-          cb(data as ArticuloBorrador[])
-        } else if (error) {
-          console.error('Error fetching articulos_borrador:', error)
-          cb([])
-        }
-      })
+    getArticulosBorrador().then(cb)
   }
 
   fetch()
@@ -38,7 +41,11 @@ export function listenArticulosBorrador(cb: (articulos: ArticuloBorrador[]) => v
     .on('postgres_changes', { event: '*', schema: 'public', table: 'articulos_borrador' }, fetch)
     .subscribe()
 
+  // Refresco periódico cada 10 segundos
+  const timer = setInterval(fetch, 10000)
+
   return () => {
+    clearInterval(timer)
     supabase.removeChannel(channel)
   }
 }
@@ -170,20 +177,24 @@ export async function enviarPedido(
 // PEDIDOS ENVIADOS (HISTORIAL)
 // -----------------------------------------------
 
+/** Obtener historial de pedidos enviados directamente */
+export async function getPedidosEnviados(): Promise<PedidoEnviado[]> {
+  const { data, error } = await supabase
+    .from('pedidos_enviados')
+    .select('*')
+    .order('fecha_envio', { ascending: false })
+
+  if (error || !data) {
+    if (error) console.error('Error fetching pedidos_enviados:', error)
+    return []
+  }
+  return data as PedidoEnviado[]
+}
+
+/** Escuchar pedidos enviados en tiempo real con refresco preventivo */
 export function listenPedidosEnviados(cb: (pedidos: PedidoEnviado[]) => void): () => void {
   const fetch = () => {
-    supabase
-      .from('pedidos_enviados')
-      .select('*')
-      .order('fecha_envio', { ascending: false })
-      .then(({ data, error }) => {
-        if (!error && data) {
-          cb(data as PedidoEnviado[])
-        } else if (error) {
-          console.error('Error fetching pedidos_enviados:', error)
-          cb([])
-        }
-      })
+    getPedidosEnviados().then(cb)
   }
 
   fetch()
@@ -194,7 +205,11 @@ export function listenPedidosEnviados(cb: (pedidos: PedidoEnviado[]) => void): (
     .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos_enviados' }, fetch)
     .subscribe()
 
+  // Refresco periódico cada 10 segundos
+  const timer = setInterval(fetch, 10000)
+
   return () => {
+    clearInterval(timer)
     supabase.removeChannel(channel)
   }
 }
