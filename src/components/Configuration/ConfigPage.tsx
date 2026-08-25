@@ -5,8 +5,9 @@ import { listenTiposEquipo, createTipoEquipo, getTiposEquipo, updateTipoEquipo }
 import { listenProfiles, deleteProfile, adminCreateUser, updateProfile, getProfiles } from '../../services/profiles'
 import { fetchAllDeletedRecords, restoreRecord, type DeletedRecord } from '../../services/recycleBin'
 import { useAuth } from '../../services/AuthContext'
+import { supabase } from '../../services/supabaseClient'
 import type { Lugar, Equipo, TipoEquipoDoc, EstadoEquipo, Profile } from '../../types/supabase'
-import { MapPin, Monitor, Layers, Users, Trash2, RefreshCcw, Pencil, X, Check, Eye, EyeOff } from 'lucide-react'
+import { MapPin, Monitor, Layers, Users, Trash2, RefreshCcw, Pencil, X, Check, Eye, EyeOff, KeyRound } from 'lucide-react'
 
 type TabType = 'lugares' | 'equipos' | 'tipos' | 'usuarios' | 'papelera'
 
@@ -1040,6 +1041,28 @@ export default function ConfigPage() {
                   )}
 
                   <div className="flex items-center gap-2">
+                    <button
+                      onClick={async () => {
+                        if (!confirm(`¿Enviar correo de recuperación de contraseña a ${p.short_name} (${p.email}) desde Supabase?`)) return
+                        try {
+                          const { error } = await supabase.auth.resetPasswordForEmail(p.email, {
+                            redirectTo: `${window.location.origin}/reset-password`,
+                          })
+                          if (error) {
+                            alert(`Error al enviar correo: ${error.message}`)
+                          } else {
+                            alert(`¡Correo de recuperación de contraseña enviado exitosamente a ${p.email}!`)
+                          }
+                        } catch (err: any) {
+                          alert(`Error: ${err?.message || 'Error desconocido'}`)
+                        }
+                      }}
+                      className="btn bg-cyan-950/60 hover:bg-cyan-900/80 text-cyan-300 border border-cyan-800/80 px-2 py-1 text-[11px] rounded cursor-pointer inline-flex items-center gap-1 transition-colors"
+                      title="Enviar correo de recuperación de contraseña al usuario"
+                    >
+                      <KeyRound className="size-3.5" />
+                      <span>Recuperar Clave</span>
+                    </button>
                     <button
                       onClick={async () => {
                         const newRole = p.role === 'admin' ? 'user' : 'admin'

@@ -9,6 +9,7 @@ import AgendaPage from './pages/AgendaPage'
 import TasksPage from './pages/TasksPage'
 import AuditLogsPage from './pages/AuditLogsPage'
 import ConfigPage from './components/Configuration/ConfigPage'
+import ResetPasswordPage from './pages/ResetPasswordPage'
 import { Loader2, ShieldAlert, KeyRound } from 'lucide-react'
 
 // Componente para proteger rutas que requieren Administrador
@@ -46,6 +47,15 @@ function ProtectedAdminRoute({ children }: { children: React.ReactNode }) {
 
 function AppRoutes() {
   const { user, profile, loading } = useAuth()
+
+  // Detectar si el usuario está accediendo al enlace de recuperación de contraseña
+  const isResetPasswordPath =
+    window.location.pathname === '/reset-password' ||
+    window.location.hash.includes('type=recovery')
+
+  if (isResetPasswordPath) {
+    return <ResetPasswordPage />
+  }
 
   if (loading) {
     return (
