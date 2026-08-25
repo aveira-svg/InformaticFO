@@ -323,7 +323,11 @@ export default function ConfigPage() {
     return [...tiposEquipo].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }))
   }, [tiposEquipo])
 
-  const equiposPrestamo = equipos.filter((e) => e.historico !== true)
+  const equiposPrestamo = React.useMemo(() => {
+    return equipos
+      .filter((e) => e.historico !== true)
+      .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }))
+  }, [equipos])
 
   return (
     <div className="space-y-6">
@@ -642,63 +646,91 @@ export default function ConfigPage() {
             {equiposPrestamo.length === 0 ? (
               <p className="text-xs text-slate-500 py-4 text-center">No hay equipos cargados para préstamo.</p>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {equiposPrestamo.map((eq) => {
-                  const tipoObj = tiposEquipo.find((t) => t.id === eq.tipo)
-                  return (
-                    <div
-                      key={eq.id}
-                      className="p-3 bg-slate-950 border border-slate-800 rounded-xl flex items-center justify-between gap-2"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono text-xs font-bold text-cyan-300 bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
-                            {eq.codigo_unico}
-                          </span>
-                          <span
-                            className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
-                              eq.estado === 'disponible'
-                                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                                : eq.estado === 'en_uso'
-                                ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20'
-                                : eq.estado === 'mantenimiento'
-                                ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                                : 'bg-red-500/10 text-red-400 border-red-500/20'
-                            }`}
-                          >
-                            {eq.estado}
-                          </span>
-                        </div>
-                        <p className="text-xs font-semibold text-slate-200 mt-1 truncate">{eq.nombre}</p>
-                        <p className="text-[11px] text-slate-400 truncate">
-                          {tipoObj?.nombre || eq.tipo} {eq.marca ? `• ${eq.marca}` : ''} {eq.modelo ? `(${eq.modelo})` : ''}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => setEditingEquipo(eq)}
-                          title="Editar equipo"
-                          className="text-slate-500 hover:text-cyan-300 p-1.5 rounded-lg hover:bg-slate-900 transition cursor-pointer"
-                        >
-                          <Pencil className="size-4" />
-                        </button>
-                        <button
-                          onClick={async () => {
-                            if (confirm(`¿Eliminar equipo "${eq.codigo_unico} - ${eq.nombre}"?`)) {
-                              await deleteEquipo(eq.id)
-                              const fresh = await getEquipos()
-                              setEquipos(fresh)
-                            }
-                          }}
-                          title="Eliminar equipo"
-                          className="text-slate-500 hover:text-red-400 p-1.5 rounded-lg hover:bg-red-950/40 transition cursor-pointer"
-                        >
-                          <Trash2 className="size-4" />
-                        </button>
-                      </div>
-                    </div>
-                  )
-                })}
+              <div className="overflow-x-auto border border-slate-800 rounded-xl bg-slate-950">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-900/90 text-slate-400 uppercase font-semibold border-b border-slate-800">
+                    <tr>
+                      <th className="px-4 py-3">Código</th>
+                      <th className="px-4 py-3">Nombre del Equipo</th>
+                      <th className="px-4 py-3">Categoría</th>
+                      <th className="px-4 py-3">Marca / Modelo</th>
+                      <th className="px-4 py-3">Personal a Cargo</th>
+                      <th className="px-4 py-3">Estado</th>
+                      <th className="px-4 py-3 text-right">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/60 text-slate-300">
+                    {equiposPrestamo.map((eq) => {
+                      const tipoObj = tiposEquipo.find((t) => t.id === eq.tipo)
+                      return (
+                        <tr key={eq.id} className="hover:bg-slate-900/50 transition-colors">
+                          <td className="px-4 py-3 font-mono font-bold text-cyan-300 whitespace-nowrap">
+                            <span className="bg-slate-900 px-2 py-1 rounded border border-slate-800">
+                              {eq.codigo_unico}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 font-semibold text-slate-100">{eq.nombre}</td>
+                          <td className="px-4 py-3 text-slate-300">
+                            <span className="bg-slate-800/80 text-slate-300 px-2 py-0.5 rounded text-[11px] border border-slate-700/50">
+                              {tipoObj?.nombre || eq.tipo}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-slate-400">
+                            {eq.marca || eq.modelo ? (
+                              <span>
+                                {eq.marca || ''} {eq.modelo ? `(${eq.modelo})` : ''}
+                              </span>
+                            ) : (
+                              '—'
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-slate-300 font-medium">
+                            {eq.personal_a_cargo || '—'}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span
+                              className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase border ${
+                                eq.estado === 'disponible'
+                                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                  : eq.estado === 'en_uso'
+                                  ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20'
+                                  : eq.estado === 'mantenimiento'
+                                  ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                                  : 'bg-red-500/10 text-red-400 border-red-500/20'
+                              }`}
+                            >
+                              {eq.estado}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-right whitespace-nowrap">
+                            <div className="flex items-center justify-end gap-1">
+                              <button
+                                onClick={() => setEditingEquipo(eq)}
+                                title="Editar equipo"
+                                className="text-slate-400 hover:text-cyan-300 p-1.5 rounded-lg hover:bg-slate-900 transition cursor-pointer"
+                              >
+                                <Pencil className="size-3.5" />
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  if (confirm(`¿Eliminar equipo "${eq.codigo_unico} - ${eq.nombre}"?`)) {
+                                    await deleteEquipo(eq.id)
+                                    const fresh = await getEquipos()
+                                    setEquipos(fresh)
+                                  }
+                                }}
+                                title="Eliminar equipo"
+                                className="text-slate-400 hover:text-red-400 p-1.5 rounded-lg hover:bg-red-950/40 transition cursor-pointer"
+                              >
+                                <Trash2 className="size-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
               </div>
             )}
           </div>
