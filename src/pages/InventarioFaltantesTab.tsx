@@ -10,6 +10,12 @@ import {
   getPedidosEnviados,
   getPedidoDetalles,
 } from '../services/inventarioFaltantes'
+import {
+  listenCategoriasFaltantes,
+  createCategoriaFaltante,
+  deleteCategoriaFaltante,
+  DEFAULT_CATEGORIAS,
+} from '../services/categoriasFaltantes'
 import { useAuth } from '../services/AuthContext'
 import type {
   ArticuloBorrador,
@@ -22,10 +28,9 @@ import type {
 import {
   Plus, Trash2, Edit2, Send, FileText, ChevronDown, ChevronUp,
   Check, X, AlertTriangle, Clock, ShoppingCart, Package,
-  Printer, History, Eye, BadgeCheck,
+  Printer, History, Eye, BadgeCheck, Tag,
 } from 'lucide-react'
 
-const CATEGORIAS: CategoriaFaltante[] = ['Laboratorio', 'Papelería', 'Computación', 'Limpieza', 'Otros']
 const PRIORIDADES: PrioridadFaltante[] = ['Alta', 'Media', 'Baja']
 const MONEDAS: MonedaFaltante[] = ['ARS', 'USD', 'EUR']
 
@@ -35,12 +40,32 @@ const PRIORIDAD_COLOR: Record<PrioridadFaltante, string> = {
   Baja: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30',
 }
 
-const CATEGORIA_COLOR: Record<CategoriaFaltante, string> = {
-  Laboratorio: 'bg-cyan-500/10 text-cyan-300',
-  Papelería: 'bg-violet-500/10 text-violet-300',
-  Computación: 'bg-blue-500/10 text-blue-300',
-  Limpieza: 'bg-teal-500/10 text-teal-300',
-  Otros: 'bg-slate-500/10 text-slate-300',
+const STATIC_CATEGORY_COLORS: Record<string, string> = {
+  Laboratorio: 'bg-cyan-500/10 text-cyan-300 border-cyan-500/30',
+  Papelería: 'bg-violet-500/10 text-violet-300 border-violet-500/30',
+  Computación: 'bg-blue-500/10 text-blue-300 border-blue-500/30',
+  Limpieza: 'bg-teal-500/10 text-teal-300 border-teal-500/30',
+  Otros: 'bg-slate-500/10 text-slate-300 border-slate-500/30',
+}
+
+const PALETTE = [
+  'bg-pink-500/10 text-pink-300 border-pink-500/30',
+  'bg-amber-500/10 text-amber-300 border-amber-500/30',
+  'bg-emerald-500/10 text-emerald-300 border-emerald-500/30',
+  'bg-indigo-500/10 text-indigo-300 border-indigo-500/30',
+  'bg-orange-500/10 text-orange-300 border-orange-500/30',
+  'bg-purple-500/10 text-purple-300 border-purple-500/30',
+  'bg-rose-500/10 text-rose-300 border-rose-500/30',
+  'bg-lime-500/10 text-lime-300 border-lime-500/30',
+  'bg-fuchsia-500/10 text-fuchsia-300 border-fuchsia-500/30',
+]
+
+function getCategoriaColor(cat: string): string {
+  if (STATIC_CATEGORY_COLORS[cat]) return STATIC_CATEGORY_COLORS[cat]
+  let hash = 0
+  for (let i = 0; i < cat.length; i++) hash = (hash << 5) - hash + cat.charCodeAt(i)
+  const idx = Math.abs(hash) % PALETTE.length
+  return PALETTE[idx]
 }
 
 function formatMoney(amount: number | null | undefined, moneda: string = 'ARS'): string {
@@ -58,6 +83,12 @@ export default function InventarioFaltantesTab() {
   const { user, profile } = useAuth()
   const [articulos, setArticulos] = useState<ArticuloBorrador[]>([])
   const [pedidos, setPedidos] = useState<PedidoEnviado[]>([])
+  const [categorias, setCategorias] = useState<string[]>(DEFAULT_CATEGORIAS)
+  const [showCatModal, setShowCatModal] = useState(false)
+  const [newCatName, setNewCatName] = useState('')
+  const [catError, setCatError] = useState('')
+  const [catSaving, setCatSaving] = useState(false)
+
   const [form, setForm] = useState<FormState>(emptyForm())
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState('')
@@ -75,8 +106,56 @@ export default function InventarioFaltantesTab() {
   useEffect(() => {
     const off1 = listenArticulosBorrador(setArticulos)
     const off2 = listenPedidosEnviados(setPedidos)
-    return () => { off1(); off2() }
+    const off3 = listenCategoriasFaltantes(setCategorias)
+    return () => {
+      off1()
+      off2()
+      off3()
+    }
   }, [])
+
+  const handleCreateCategoria = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault()
+    setCatError('')
+    const trimmed = newCatName.trim()
+    if (!trimmed) {
+      setCatError('El nombre de la categoría es requerido')
+      return
+    }
+    if (categorias.some((c) => c.toLowerCase() === trimmed.toLowerCase())) {
+      setCatError('Esta categoría ya existe')
+      return
+    }
+    setCatSaving(true)
+    try {
+      const added = await createCategoriaFaltante(trimmed)
+      setCategorias((prev) => Array.from(new Set([...prev, added])))
+      setForm((prev) => ({ ...prev, categoria: added }))
+      setNewCatName('')
+      setShowCatModal(false)
+    } catch (err: any) {
+      setCatError(err?.message || 'Error al guardar la categoría')
+    } finally {
+      setCatSaving(false)
+    }
+  }
+
+  const handleDeleteCategoria = async (cat: string) => {
+    if (DEFAULT_CATEGORIAS.includes(cat)) {
+      alert('Las categorías predeterminadas no se pueden eliminar')
+      return
+    }
+    if (!confirm(`¿Eliminar la categoría "${cat}"?`)) return
+    try {
+      await deleteCategoriaFaltante(cat)
+      setCategorias((prev) => prev.filter((c) => c !== cat))
+      if (form.categoria === cat) {
+        setForm((prev) => ({ ...prev, categoria: DEFAULT_CATEGORIAS[0] }))
+      }
+    } catch (err) {
+      console.error(err)
+    }
+  }
 
   useEffect(() => {
     if (profile?.short_name) setSendingSolicitante(profile.short_name)
@@ -274,12 +353,48 @@ export default function InventarioFaltantesTab() {
           <form onSubmit={handleAdd} className="p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <div className="sm:col-span-2 lg:col-span-1 grid gap-1.5">
               <label className="text-xs font-semibold text-slate-400">Nombre / Especificación <span className="text-red-400">*</span></label>
-              <input type="text" required className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100 placeholder-slate-600 outline-none focus:border-violet-500 transition" placeholder="Ej: Resmas de papel A4..." value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} />
+              <input
+                type="text"
+                required
+                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100 placeholder-slate-600 outline-none focus:border-violet-500 transition"
+                placeholder="Ej: Resmas de papel A4..."
+                value={form.nombre}
+                onChange={(e) => setForm({ ...form, nombre: e.target.value })}
+              />
             </div>
             <div className="grid gap-1.5">
-              <label className="text-xs font-semibold text-slate-400">Categoría <span className="text-red-400">*</span></label>
-              <select className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100 outline-none focus:border-violet-500 transition cursor-pointer" value={form.categoria} onChange={(e) => setForm({ ...form, categoria: e.target.value as CategoriaFaltante })}>
-                {CATEGORIAS.map((c) => <option key={c} value={c}>{c}</option>)}
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-slate-400">
+                  Categoría <span className="text-red-400">*</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setShowCatModal(true)}
+                  className="text-[11px] text-violet-400 hover:text-violet-300 font-semibold inline-flex items-center gap-1 cursor-pointer transition-colors"
+                  title="Agregar o gestionar categorías"
+                >
+                  <Plus className="size-3" /> Nueva / Gestionar
+                </button>
+              </div>
+              <select
+                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100 outline-none focus:border-violet-500 transition cursor-pointer"
+                value={form.categoria}
+                onChange={(e) => {
+                  if (e.target.value === '__NEW__') {
+                    setShowCatModal(true)
+                  } else {
+                    setForm({ ...form, categoria: e.target.value })
+                  }
+                }}
+              >
+                {categorias.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+                <option value="__NEW__" className="text-violet-400 font-semibold">
+                  + Agregar nueva categoría...
+                </option>
               </select>
             </div>
             <div className="grid gap-1.5">
@@ -352,7 +467,26 @@ export default function InventarioFaltantesTab() {
                   {articulos.map((a) => editingId === a.id ? (
                     <tr key={a.id} className="bg-slate-800/40">
                       <td className="px-3 py-2"><input className="w-full bg-slate-950 border border-violet-600 rounded px-2 py-1 text-xs text-slate-100 outline-none" value={editForm.nombre} onChange={(e) => setEditForm({ ...editForm, nombre: e.target.value })} /></td>
-                      <td className="px-3 py-2"><select className="bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-slate-100 cursor-pointer outline-none" value={editForm.categoria} onChange={(e) => setEditForm({ ...editForm, categoria: e.target.value as CategoriaFaltante })}>{CATEGORIAS.map((c) => <option key={c} value={c}>{c}</option>)}</select></td>
+                      <td className="px-3 py-2">
+                        <select
+                          className="bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-slate-100 cursor-pointer outline-none"
+                          value={editForm.categoria}
+                          onChange={(e) => {
+                            if (e.target.value === '__NEW__') {
+                              setShowCatModal(true)
+                            } else {
+                              setEditForm({ ...editForm, categoria: e.target.value })
+                            }
+                          }}
+                        >
+                          {categorias.map((c) => (
+                            <option key={c} value={c}>
+                              {c}
+                            </option>
+                          ))}
+                          <option value="__NEW__">+ Nueva categoría...</option>
+                        </select>
+                      </td>
                       <td className="px-3 py-2"><select className="bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-slate-100 cursor-pointer outline-none" value={editForm.prioridad} onChange={(e) => setEditForm({ ...editForm, prioridad: e.target.value as PrioridadFaltante })}>{PRIORIDADES.map((p) => <option key={p} value={p}>{p}</option>)}</select></td>
                       <td className="px-3 py-2 text-center"><input type="number" min={1} className="w-16 bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-slate-100 outline-none text-center" value={editForm.cantidad} onChange={(e) => setEditForm({ ...editForm, cantidad: e.target.value })} /></td>
                       <td className="px-3 py-2 text-right">
@@ -374,7 +508,11 @@ export default function InventarioFaltantesTab() {
                   ) : (
                     <tr key={a.id} className="hover:bg-slate-800/40 transition-colors">
                       <td className="px-4 py-3 font-medium text-slate-100">{a.nombre}</td>
-                      <td className="px-3 py-3"><span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${CATEGORIA_COLOR[a.categoria]}`}>{a.categoria}</span></td>
+                      <td className="px-3 py-3">
+                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${getCategoriaColor(a.categoria)}`}>
+                          {a.categoria}
+                        </span>
+                      </td>
                       <td className="px-3 py-3"><span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${PRIORIDAD_COLOR[a.prioridad]}`}>{a.prioridad}</span></td>
                       <td className="px-3 py-3 text-center font-mono font-semibold text-slate-200">{a.cantidad}</td>
                       <td className="px-3 py-3 text-right text-slate-400 font-mono">{a.precio_estimado != null ? `${a.moneda} ${a.precio_estimado.toFixed(2)}` : '—'}</td>
@@ -451,6 +589,91 @@ export default function InventarioFaltantesTab() {
         )}
       </div>
 
+      {/* Modal de Gestión de Categorías */}
+      {showCatModal && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-md card bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-2xl space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-slate-100 text-base flex items-center gap-2">
+                <Tag className="size-5 text-violet-400" />
+                <span>Gestionar Categorías</span>
+              </h3>
+              <button onClick={() => setShowCatModal(false)} className="text-slate-400 hover:text-white cursor-pointer">
+                <X className="size-5" />
+              </button>
+            </div>
+
+            {/* Crear nueva categoría */}
+            <form onSubmit={handleCreateCategoria} className="space-y-3">
+              <div className="grid gap-1.5">
+                <label className="text-xs font-semibold text-slate-400">Nueva Categoría</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ej: Mobiliario, Ferretería, Audio..."
+                    className="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100 placeholder-slate-600 outline-none focus:border-violet-500 transition"
+                    value={newCatName}
+                    onChange={(e) => { setNewCatName(e.target.value); setCatError('') }}
+                  />
+                  <button
+                    type="submit"
+                    disabled={catSaving || !newCatName.trim()}
+                    className="btn bg-violet-600 hover:bg-violet-500 text-white font-bold text-xs py-2 px-3 rounded-lg inline-flex items-center gap-1 cursor-pointer disabled:opacity-50 transition"
+                  >
+                    <Plus className="size-4" />
+                    <span>{catSaving ? 'Guardando...' : 'Agregar'}</span>
+                  </button>
+                </div>
+                {catError && <p className="text-xs text-red-400 flex items-center gap-1"><AlertTriangle className="size-3.5" />{catError}</p>}
+              </div>
+            </form>
+
+            {/* Lista de categorías disponibles */}
+            <div className="space-y-2 pt-2 border-t border-slate-800">
+              <h4 className="text-xs font-semibold text-slate-400">Categorías Registradas ({categorias.length})</h4>
+              <div className="max-h-60 overflow-y-auto space-y-1.5 pr-1">
+                {categorias.map((cat) => {
+                  const isDefault = DEFAULT_CATEGORIAS.includes(cat)
+                  return (
+                    <div
+                      key={cat}
+                      className="flex items-center justify-between p-2 rounded-lg bg-slate-950/60 border border-slate-800/80 text-xs"
+                    >
+                      <span className={`px-2 py-0.5 rounded-full font-semibold border text-[11px] ${getCategoriaColor(cat)}`}>
+                        {cat}
+                      </span>
+                      {isDefault ? (
+                        <span className="text-[10px] text-slate-500 italic">Predeterminada</span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteCategoria(cat)}
+                          className="p-1 text-slate-500 hover:text-red-400 cursor-pointer transition-colors"
+                          title="Eliminar categoría personalizada"
+                        >
+                          <Trash2 className="size-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => setShowCatModal(false)}
+                className="w-full btn bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs py-2 rounded-xl cursor-pointer"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showSendModal && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="w-full max-w-md card bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-2xl space-y-4">
@@ -513,7 +736,15 @@ export default function InventarioFaltantesTab() {
                       <tr key={d.id} className="hover:bg-slate-800/30 transition-colors">
                         <td className="px-4 py-3 text-slate-500">{i + 1}</td>
                         <td className="px-4 py-3 font-medium text-slate-100">{d.nombre}</td>
-                        <td className="px-3 py-3"><span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${CATEGORIA_COLOR[d.categoria]}`}>{d.categoria}</span></td>
+                        <td className="px-3 py-3">
+                          <span
+                            className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${getCategoriaColor(
+                              d.categoria
+                            )}`}
+                          >
+                            {d.categoria}
+                          </span>
+                        </td>
                         <td className="px-3 py-3"><span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${PRIORIDAD_COLOR[d.prioridad]}`}>{d.prioridad}</span></td>
                         <td className="px-3 py-3 text-center font-mono font-semibold">{d.cantidad}</td>
                         <td className="px-3 py-3 text-right font-mono text-slate-400">{d.precio_estimado != null ? `${d.moneda} ${d.precio_estimado.toFixed(2)}` : '—'}</td>

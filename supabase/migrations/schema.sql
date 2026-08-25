@@ -556,11 +556,20 @@ CREATE TRIGGER history_resguardos_trg AFTER INSERT OR UPDATE ON public.resguardo
 -- MÓDULO: INVENTARIO DE FALTANTES
 -- ----------------------------------------------------
 
+-- TABLA: categorias_faltantes (Categorías personalizadas para inventario de faltantes)
+CREATE TABLE IF NOT EXISTS public.categorias_faltantes (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    nombre TEXT NOT NULL UNIQUE,
+    color TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    is_deleted BOOLEAN NOT NULL DEFAULT FALSE
+);
+
 -- TABLA: articulos_borrador (Lista activa de artículos pendientes de compra)
 CREATE TABLE IF NOT EXISTS public.articulos_borrador (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     nombre TEXT NOT NULL,
-    categoria TEXT NOT NULL CHECK (categoria IN ('Laboratorio', 'Papelería', 'Computación', 'Limpieza', 'Otros')),
+    categoria TEXT NOT NULL,
     cantidad INT NOT NULL DEFAULT 1 CHECK (cantidad > 0),
     prioridad TEXT NOT NULL DEFAULT 'Media' CHECK (prioridad IN ('Alta', 'Media', 'Baja')),
     justificacion TEXT,
@@ -601,9 +610,15 @@ CREATE TABLE IF NOT EXISTS public.pedido_detalles (
 );
 
 -- Habilitar RLS
+ALTER TABLE public.categorias_faltantes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.articulos_borrador ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.pedidos_enviados ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.pedido_detalles ENABLE ROW LEVEL SECURITY;
+
+-- Políticas RLS: categorias_faltantes
+DROP POLICY IF EXISTS "Acceso total a categorias_faltantes para usuarios activos" ON public.categorias_faltantes;
+CREATE POLICY "Acceso total a categorias_faltantes para usuarios activos"
+    ON public.categorias_faltantes FOR ALL USING (public.is_active_user());
 
 -- Políticas RLS: articulos_borrador (acceso total para usuarios activos)
 DROP POLICY IF EXISTS "Acceso total a articulos_borrador para usuarios activos" ON public.articulos_borrador;

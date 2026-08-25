@@ -170,7 +170,7 @@ export interface EquipmentHistory {
 // MÓDULO: INVENTARIO DE FALTANTES
 // -----------------------------------------------
 
-export type CategoriaFaltante = 'Laboratorio' | 'Papelería' | 'Computación' | 'Limpieza' | 'Otros'
+export type CategoriaFaltante = string
 export type PrioridadFaltante = 'Alta' | 'Media' | 'Baja'
 export type MonedaFaltante = 'ARS' | 'USD' | 'EUR'
 
