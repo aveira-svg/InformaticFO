@@ -1,8 +1,10 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { supabase } from '../services/supabaseClient'
+import { useAuth } from '../services/AuthContext'
 import { Lock, CheckCircle2, ShieldAlert, KeyRound, ArrowLeft, Eye, EyeOff } from 'lucide-react'
 
 export default function ResetPasswordPage() {
+  const { setIsRecovery } = useAuth()
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -10,6 +12,19 @@ export default function ResetPasswordPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
+
+  useEffect(() => {
+    // Verificar si Supabase devolvió un error en el hash o query string (ej: token expirado)
+    const hash = window.location.hash
+    const search = window.location.search
+    if (hash.includes('error') || search.includes('error')) {
+      const params = new URLSearchParams(hash.replace(/^#/, '') || search.replace(/^\?/, ''))
+      const desc = params.get('error_description') || params.get('error')
+      if (desc) {
+        setError(decodeURIComponent(desc.replace(/\+/g, ' ')))
+      }
+    }
+  }, [])
 
   async function handleResetPassword(e: React.FormEvent) {
     e.preventDefault()
@@ -73,6 +88,8 @@ export default function ResetPasswordPage() {
             <button
               type="button"
               onClick={() => {
+                setIsRecovery(false)
+                window.history.replaceState(null, '', '/')
                 window.location.href = '/'
               }}
               className="w-full btn bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold py-3 rounded-xl text-xs cursor-pointer shadow-lg shadow-cyan-500/20 transition-all"
@@ -157,6 +174,8 @@ export default function ResetPasswordPage() {
               <button
                 type="button"
                 onClick={() => {
+                  setIsRecovery(false)
+                  window.history.replaceState(null, '', '/')
                   window.location.href = '/'
                 }}
                 className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-cyan-300 transition-colors"

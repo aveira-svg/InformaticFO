@@ -46,12 +46,19 @@ function ProtectedAdminRoute({ children }: { children: React.ReactNode }) {
 }
 
 function AppRoutes() {
-  const { user, profile, loading } = useAuth()
+  const { user, profile, loading, isRecovery } = useAuth()
 
-  // Detectar si el usuario está accediendo al enlace de recuperación de contraseña
+  // Detectar si el usuario está accediendo al enlace de recuperación de contraseña o hay error en el token
   const isResetPasswordPath =
+    isRecovery ||
     window.location.pathname === '/reset-password' ||
-    window.location.hash.includes('type=recovery')
+    window.location.pathname.endsWith('/reset-password') ||
+    window.location.hash.includes('type=recovery') ||
+    window.location.search.includes('type=recovery') ||
+    window.location.hash.includes('error_code=') ||
+    window.location.hash.includes('error_description=') ||
+    window.location.search.includes('error_code=') ||
+    window.location.search.includes('error_description=')
 
   if (isResetPasswordPath) {
     return <ResetPasswordPage />

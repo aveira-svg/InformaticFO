@@ -7,6 +7,8 @@ interface AuthContextType {
   user: User | null
   profile: Profile | null
   loading: boolean
+  isRecovery: boolean
+  setIsRecovery: (v: boolean) => void
   signOut: () => Promise<void>
 }
 
@@ -16,6 +18,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
+  const [isRecovery, setIsRecovery] = useState<boolean>(() => {
+    return (
+      window.location.pathname === '/reset-password' ||
+      window.location.hash.includes('type=recovery') ||
+      window.location.search.includes('type=recovery')
+    )
+  })
 
   const fetchProfile = async (userId: string) => {
     try {
@@ -63,7 +72,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })
 
     // 2. Suscribirse a los cambios de estado de autenticación
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setIsRecovery(true)
+      }
       if (session) {
         setUser(session.user)
         await fetchProfile(session.user.id)
@@ -84,7 +96,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, signOut }}>
+    <AuthContext.Provider value={{ user, profile, loading, isRecovery, setIsRecovery, signOut }}>
       {children}
     </AuthContext.Provider>
   )
