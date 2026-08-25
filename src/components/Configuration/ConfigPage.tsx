@@ -1049,7 +1049,11 @@ export default function ConfigPage() {
                             redirectTo: `${window.location.origin}/reset-password`,
                           })
                           if (error) {
-                            alert(`Error al enviar correo: ${error.message}`)
+                            if (error.status === 429 || error.message?.toLowerCase().includes('rate limit')) {
+                              alert('Límite de envíos alcanzado (Error 429). Supabase limita la cantidad de correos por hora para prevenir spam. Por favor, aguarda unos minutos.')
+                            } else {
+                              alert(`Error al enviar correo: ${error.message}`)
+                            }
                           } else {
                             alert(`¡Correo de recuperación de contraseña enviado exitosamente a ${p.email}!`)
                           }

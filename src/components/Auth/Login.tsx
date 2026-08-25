@@ -45,13 +45,21 @@ export function Login() {
       })
 
       if (resetError) {
-        setError(resetError.message || 'No se pudo enviar el correo de recuperación.')
+        if (resetError.status === 429 || resetError.message?.toLowerCase().includes('rate limit') || resetError.message?.toLowerCase().includes('too many')) {
+          setError('Límite de envíos alcanzado por seguridad (Error 429). Supabase limita la cantidad de correos de recuperación por hora. Por favor, espera unos minutos antes de volver a intentar o revisa tu bandeja de entrada.')
+        } else {
+          setError(resetError.message || 'No se pudo enviar el correo de recuperación.')
+        }
       } else {
         setRecoverySuccess(true)
       }
     } catch (err: any) {
       console.error(err)
-      setError(err?.message || 'Error al procesar la solicitud de recuperación.')
+      if (err?.status === 429 || err?.message?.toLowerCase().includes('rate limit')) {
+        setError('Límite de envíos alcanzado por seguridad (Error 429). Por favor, espera unos minutos antes de reintentar.')
+      } else {
+        setError(err?.message || 'Error al procesar la solicitud de recuperación.')
+      }
     } finally {
       setLoading(false)
     }
