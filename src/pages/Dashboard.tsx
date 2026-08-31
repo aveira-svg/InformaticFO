@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { listenLugares, getLugares, setDisponibleLugar } from '../services/lugares'
-import { listenPrestamosActivos, listenTodosPrestamos, getPrestamosActivos, getTodosPrestamos } from '../services/prestamos'
+import { listenPrestamosActivos, getPrestamosActivos } from '../services/prestamos'
 import { listenEventosAgenda } from '../services/eventosAgenda'
 import { getEquiposByIds } from '../services/equipos'
 import type { Lugar, Prestamo, EventoAgenda, Equipo } from '../types/supabase'
@@ -15,7 +15,6 @@ import { Bell, RefreshCw, CheckCircle, UserPlus, UserCheck, CalendarDays } from 
 export default function Dashboard() {
   const [lugares, setLugares] = useState<Lugar[]>([])
   const [prestamos, setPrestamos] = useState<Prestamo[]>([])
-  const [todosPrestamos, setTodosPrestamos] = useState<Prestamo[]>([])
   const [eventosAgenda, setEventosAgenda] = useState<EventoAgenda[]>([])
   const [showForm, setShowForm] = useState(false)
   const [selectedLugarId, setSelectedLugarId] = useState<string | null>(null)
@@ -28,13 +27,11 @@ export default function Dashboard() {
   useEffect(() => {
     const off1 = listenLugares(setLugares)
     const off2 = listenPrestamosActivos(setPrestamos)
-    const off3 = listenTodosPrestamos(setTodosPrestamos)
-    const off4 = listenEventosAgenda(setEventosAgenda)
+    const off3 = listenEventosAgenda(setEventosAgenda)
     return () => {
       off1()
       off2()
       off3()
-      off4()
     }
   }, [])
 
@@ -91,14 +88,12 @@ export default function Dashboard() {
 
   const handleRefresh = async () => {
     try {
-      const [l, p, tp] = await Promise.all([
+      const [l, p] = await Promise.all([
         getLugares(),
         getPrestamosActivos(),
-        getTodosPrestamos(),
       ])
       setLugares(l)
       setPrestamos(p)
-      setTodosPrestamos(tp)
       const ids = Array.from(new Set(p.map((item) => item.equipo_id)))
       if (ids.length) {
         const map = await getEquiposByIds(ids)
@@ -326,39 +321,32 @@ export default function Dashboard() {
 
   const lugaresFiltrados = useMemo(() => {
     const visibles = lugares.filter((l) => l.activo)
-    const frecuenciaPorLugar = new Map<string, number>()
-    for (const p of todosPrestamos) {
-      frecuenciaPorLugar.set(p.lugar_id, (frecuenciaPorLugar.get(p.lugar_id) || 0) + 1)
+
+    const getEarliestHora = (lugarId: string): string => {
+      const info = eventosPorLugar.get(lugarId)
+      if (!info || info.eventos.length === 0) return '99:99'
+
+      // Priorizar el primer evento que esté próximo, en curso, vencido o programado
+      const eventoActivoOProgramado = info.eventos.find(
+        (e) => e.estado === 'proximo' || e.estado === 'en_curso' || e.estado === 'vencido' || e.estado === 'programado'
+      )
+      if (eventoActivoOProgramado?.evento.hora_inicio) {
+        return eventoActivoOProgramado.evento.hora_inicio
+      }
+      return info.eventos[0]?.evento.hora_inicio || '99:99'
     }
 
     return [...visibles].sort((a, b) => {
-      const infoA = eventosPorLugar.get(a.id)
-      const infoB = eventosPorLugar.get(b.id)
+      const horaA = getEarliestHora(a.id)
+      const horaB = getEarliestHora(b.id)
 
-      const getEventScore = (info?: { eventos: EventoConEstado[] }) => {
-        if (!info || info.eventos.length === 0) return 0
-        if (info.eventos.some((e) => e.estado === 'en_curso')) return 4
-        if (info.eventos.some((e) => e.estado === 'proximo')) return 3
-        if (info.eventos.some((e) => e.estado === 'vencido')) return 2
-        if (info.eventos.some((e) => e.estado === 'programado')) return 1
-        return 0
+      if (horaA !== horaB) {
+        return horaA.localeCompare(horaB)
       }
 
-      const scoreA = getEventScore(infoA)
-      const scoreB = getEventScore(infoB)
-      if (scoreA !== scoreB) return scoreB - scoreA
-
-      const tienePrestadosA = (resumenPorLugar.get(a.id)?.prestados || 0) > 0
-      const tienePrestadosB = (resumenPorLugar.get(b.id)?.prestados || 0) > 0
-
-      if (tienePrestadosA && !tienePrestadosB) return -1
-      if (!tienePrestadosA && tienePrestadosB) return 1
-
-      const freqA = frecuenciaPorLugar.get(a.id) || 0
-      const freqB = frecuenciaPorLugar.get(b.id) || 0
-      return freqB - freqA
+      return a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' })
     })
-  }, [lugares, todosPrestamos, resumenPorLugar, eventosPorLugar])
+  }, [lugares, eventosPorLugar])
 
   const totalPrestadosCount = useMemo(() => {
     return prestamos.filter((p) => p.estado === 'prestado').length
