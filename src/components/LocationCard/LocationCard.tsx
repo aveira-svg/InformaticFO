@@ -41,7 +41,6 @@ export function LocationCard({
 
   const tieneEventoEnCurso = eventos.some((e) => e.estado === 'en_curso')
   const tieneEventoProximo = eventos.some((e) => e.estado === 'proximo')
-  const tieneEventoVencido = eventos.some((e) => e.estado === 'vencido')
 
   // Alerta de prender: lugar en OFF con evento en curso
   const tieneAlertaPrender = !activo && tieneEventoEnCurso
@@ -62,21 +61,21 @@ export function LocationCard({
     bgClass = 'bg-emerald-950/30 border-emerald-500/60 shadow-lg shadow-emerald-950/40 hover:border-emerald-400'
     dotClass = 'text-emerald-400 animate-pulse shadow-sm shadow-emerald-400'
     titleClass = 'text-emerald-100'
-  } else if (tieneAlertaPrender || tieneAlertaRecuperar || tieneEventoVencido) {
-    // 2. OFF con evento en curso, equipos prestados o evento vencido: Rojo destacado
+  } else if (tieneAlertaRecuperar) {
+    // 2. OFF con pendientes de devolución: Rojo destacado (intensidad actual)
     bgClass = 'bg-red-950/40 border-red-600/80 shadow-lg shadow-red-950/40 hover:border-red-500'
     dotClass = 'text-red-500 animate-pulse'
     titleClass = 'text-red-100'
   } else if (tieneAlertaProximo) {
-    // 3. OFF con evento agendado 20 min antes: Amarillo destacado
+    // 3. OFF por comenzar (<20 min): Amarillo destacado (intensidad actual)
     bgClass = 'bg-amber-950/40 border-amber-500/80 shadow-lg shadow-amber-950/40 hover:border-amber-400'
     dotClass = 'text-amber-400 animate-pulse'
     titleClass = 'text-amber-100'
   } else {
-    // 4. OFF normal
-    bgClass = 'bg-slate-950/60 border-slate-800/80 shadow-slate-950/50 hover:border-slate-700'
+    // 4. Cualquier otro lugar en OFF (tengan o no algo agendado): Color menos intenso / atenuado
+    bgClass = 'bg-slate-950/40 border-slate-800/40 shadow-none opacity-60 hover:opacity-100 hover:border-slate-700'
     dotClass = 'text-slate-600'
-    titleClass = 'text-slate-100'
+    titleClass = 'text-slate-400'
   }
 
   return (
