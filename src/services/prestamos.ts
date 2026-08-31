@@ -143,7 +143,7 @@ export async function preventDuplicateLoan(equipoId: string): Promise<boolean> {
 
 // Crear un préstamo
 export async function createPrestamo(data: Omit<Prestamo, 'id' | 'is_deleted'>) {
-  // Obtener nombre del lugar para trazabilidad
+  // 1. Obtener nombre del lugar para trazabilidad
   let lugarNombre = data.lugar_id
   if (data.lugar_id === 'personal') {
     lugarNombre = `Préstamo Personal (${data.responsable || 'Sin asignar'})`
@@ -155,6 +155,31 @@ export async function createPrestamo(data: Omit<Prestamo, 'id' | 'is_deleted'>) 
       .maybeSingle()
     if (lugarData?.nombre) {
       lugarNombre = lugarData.nombre
+    }
+  }
+
+  // 2. Obtener código único del equipo
+  let equipoCodigo = data.equipo_id
+  const { data: eqData } = await supabase
+    .from('equipos')
+    .select('codigo_unico')
+    .eq('id', data.equipo_id)
+    .maybeSingle()
+  if (eqData?.codigo_unico) {
+    equipoCodigo = eqData.codigo_unico
+  }
+
+  // 3. Obtener usuario responsable
+  const { data: authData } = await supabase.auth.getUser()
+  let userShortName = 'Usuario'
+  if (authData?.user?.id) {
+    const { data: prof } = await supabase
+      .from('profiles')
+      .select('short_name')
+      .eq('id', authData.user.id)
+      .maybeSingle()
+    if (prof?.short_name) {
+      userShortName = prof.short_name
     }
   }
 
@@ -180,6 +205,22 @@ export async function createPrestamo(data: Omit<Prestamo, 'id' | 'is_deleted'>) 
 
   // Cambiar el estado del equipo a 'en_uso' con la ubicación del lugar
   await updateEquipoEstado(data.equipo_id, 'en_uso', lugarNombre)
+
+  // Registrar log de auditoría explícito para asegurar que Bitácora y Auditoría muestren el lugar de inmediato
+  try {
+    await supabase.from('audit_logs').insert([
+      {
+        user_id: authData?.user?.id || null,
+        user_short_name: userShortName,
+        module: 'prestamos',
+        action_type: 'Préstamo registrado',
+        details: `Equipo ${equipoCodigo} pasó a "en_uso" en ${lugarNombre} (responsable: ${data.responsable || 'General'})`,
+        timestamp: new Date().toISOString(),
+      },
+    ])
+  } catch (logErr) {
+    console.warn('Error registrando log de auditoría:', logErr)
+  }
 }
 
 // Marcar devolución de un préstamo
@@ -193,6 +234,45 @@ export async function marcarDevolucion(prestamoId: string) {
 
   if (getError || !prestamo) {
     throw getError || new Error('Préstamo no encontrado')
+  }
+
+  let lugarNombre = prestamo.lugar_id
+  if (prestamo.lugar_id === 'personal') {
+    lugarNombre = `Préstamo Personal (${prestamo.responsable || 'Sin asignar'})`
+  } else {
+    const { data: lugarData } = await supabase
+      .from('lugares')
+      .select('nombre')
+      .eq('id', prestamo.lugar_id)
+      .maybeSingle()
+    if (lugarData?.nombre) {
+      lugarNombre = lugarData.nombre
+    }
+  }
+
+  // Obtener código único del equipo
+  let equipoCodigo = prestamo.equipo_id
+  const { data: eqData } = await supabase
+    .from('equipos')
+    .select('codigo_unico')
+    .eq('id', prestamo.equipo_id)
+    .maybeSingle()
+  if (eqData?.codigo_unico) {
+    equipoCodigo = eqData.codigo_unico
+  }
+
+  // Obtener usuario responsable
+  const { data: authData } = await supabase.auth.getUser()
+  let userShortName = 'Usuario'
+  if (authData?.user?.id) {
+    const { data: prof } = await supabase
+      .from('profiles')
+      .select('short_name')
+      .eq('id', authData.user.id)
+      .maybeSingle()
+    if (prof?.short_name) {
+      userShortName = prof.short_name
+    }
   }
 
   // Marcar préstamo como devuelto
@@ -210,4 +290,20 @@ export async function marcarDevolucion(prestamoId: string) {
 
   // Cambiar el estado del equipo a 'disponible' (ubicación liberada)
   await updateEquipoEstado(prestamo.equipo_id, 'disponible', '')
+
+  // Registrar log de auditoría explícito con el lugar para asegurar que Bitácora y Auditoría lo muestren de inmediato
+  try {
+    await supabase.from('audit_logs').insert([
+      {
+        user_id: authData?.user?.id || null,
+        user_short_name: userShortName,
+        module: 'prestamos',
+        action_type: 'Devolución de equipo',
+        details: `Equipo ${equipoCodigo} pasó a "disponible" desde ${lugarNombre}`,
+        timestamp: new Date().toISOString(),
+      },
+    ])
+  } catch (logErr) {
+    console.warn('Error registrando log de auditoría:', logErr)
+  }
 }

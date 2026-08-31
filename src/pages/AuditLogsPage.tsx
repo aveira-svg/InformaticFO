@@ -43,7 +43,26 @@ export default function AuditLogsPage() {
 
   const filteredLogs = React.useMemo(() => {
     const q = search.trim().toLowerCase()
-    return logs.filter((l) => {
+
+    // Descartar logs genéricos del trigger si existe el registro explícito detallado
+    const dedupedLogs = logs.filter((log, _idx, arr) => {
+      const isGenericPrestamo =
+        log.details?.startsWith('Préstamo registrado para equipo ID') ||
+        log.details?.includes('marcado como devuelto') ||
+        log.details?.startsWith('Préstamo ID ')
+      if (!isGenericPrestamo) return true
+
+      const logTime = new Date(log.timestamp).getTime()
+      const hasRichDuplicate = arr.some(
+        (other) =>
+          other.id !== log.id &&
+          Math.abs(new Date(other.timestamp).getTime() - logTime) < 4000 &&
+          (other.details?.includes('pasó a "en_uso"') || other.details?.includes('pasó a "disponible"'))
+      )
+      return !hasRichDuplicate
+    })
+
+    return dedupedLogs.filter((l) => {
       const matchModule = !module || l.module === module
       const matchSearch =
         !q ||
