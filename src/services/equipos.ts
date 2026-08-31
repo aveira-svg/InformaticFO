@@ -98,10 +98,15 @@ export async function getEquiposByIds(ids: string[]): Promise<Map<string, Equipo
 }
 
 // Actualizar estado del equipo
-export async function updateEquipoEstado(id: string, estado: Equipo['estado']): Promise<void> {
+export async function updateEquipoEstado(id: string, estado: Equipo['estado'], ubicacion?: string): Promise<void> {
+  const payload: Record<string, any> = { estado, updated_at: new Date().toISOString() }
+  if (ubicacion !== undefined) {
+    payload.ubicacion_actual = ubicacion
+  }
+
   const { error } = await supabase
     .from('equipos')
-    .update({ estado, updated_at: new Date().toISOString() })
+    .update(payload)
     .eq('id', id)
 
   if (error) {

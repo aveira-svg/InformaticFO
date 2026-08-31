@@ -143,6 +143,21 @@ export async function preventDuplicateLoan(equipoId: string): Promise<boolean> {
 
 // Crear un préstamo
 export async function createPrestamo(data: Omit<Prestamo, 'id' | 'is_deleted'>) {
+  // Obtener nombre del lugar para trazabilidad
+  let lugarNombre = data.lugar_id
+  if (data.lugar_id === 'personal') {
+    lugarNombre = `Préstamo Personal (${data.responsable || 'Sin asignar'})`
+  } else {
+    const { data: lugarData } = await supabase
+      .from('lugares')
+      .select('nombre')
+      .eq('id', data.lugar_id)
+      .maybeSingle()
+    if (lugarData?.nombre) {
+      lugarNombre = lugarData.nombre
+    }
+  }
+
   const { error } = await supabase
     .from('prestamos')
     .insert([
@@ -163,16 +178,16 @@ export async function createPrestamo(data: Omit<Prestamo, 'id' | 'is_deleted'>) 
     throw error
   }
 
-  // Cambiar el estado del equipo a 'en_uso'
-  await updateEquipoEstado(data.equipo_id, 'en_uso')
+  // Cambiar el estado del equipo a 'en_uso' con la ubicación del lugar
+  await updateEquipoEstado(data.equipo_id, 'en_uso', lugarNombre)
 }
 
 // Marcar devolución de un préstamo
 export async function marcarDevolucion(prestamoId: string) {
-  // Obtener detalles del préstamo para saber qué equipo devolver
+  // Obtener detalles del préstamo para saber qué equipo devolver y su lugar de origen
   const { data: prestamo, error: getError } = await supabase
     .from('prestamos')
-    .select('equipo_id')
+    .select('equipo_id, lugar_id, responsable')
     .eq('id', prestamoId)
     .single()
 
@@ -193,6 +208,6 @@ export async function marcarDevolucion(prestamoId: string) {
     throw updateError
   }
 
-  // Cambiar el estado del equipo a 'disponible'
-  await updateEquipoEstado(prestamo.equipo_id, 'disponible')
+  // Cambiar el estado del equipo a 'disponible' (ubicación liberada)
+  await updateEquipoEstado(prestamo.equipo_id, 'disponible', '')
 }

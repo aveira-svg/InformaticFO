@@ -253,6 +253,8 @@ DECLARE
   v_details TEXT;
   v_module TEXT;
   v_action TEXT;
+  v_lugar_nombre TEXT;
+  v_equipo_codigo TEXT;
 BEGIN
   -- Obtener nombre corto del usuario actual de la sesión
   SELECT short_name INTO v_short_name FROM public.profiles WHERE id = auth.uid();
@@ -272,7 +274,19 @@ BEGIN
         v_details := 'Se dio de baja lógica el equipo ' || NEW.codigo_unico;
       ELSIF OLD.estado <> NEW.estado THEN
         v_action := 'Cambio de estado';
-        v_details := 'Equipo ' || NEW.codigo_unico || ' cambió de "' || OLD.estado || '" a "' || NEW.estado || '"';
+        IF NEW.estado = 'en_uso' THEN
+          v_details := 'Equipo ' || NEW.codigo_unico || ' cambió de "' || OLD.estado || '" a "' || NEW.estado || '"' ||
+                       CASE WHEN NEW.ubicacion_actual IS NOT NULL AND NEW.ubicacion_actual <> ''
+                            THEN ' en ' || NEW.ubicacion_actual
+                            ELSE '' END;
+        ELSIF NEW.estado = 'disponible' THEN
+          v_details := 'Equipo ' || NEW.codigo_unico || ' cambió de "' || OLD.estado || '" a "' || NEW.estado || '"' ||
+                       CASE WHEN OLD.ubicacion_actual IS NOT NULL AND OLD.ubicacion_actual <> ''
+                            THEN ' desde ' || OLD.ubicacion_actual
+                            ELSE '' END;
+        ELSE
+          v_details := 'Equipo ' || NEW.codigo_unico || ' cambió de "' || OLD.estado || '" a "' || NEW.estado || '"';
+        END IF;
       ELSE
         v_action := 'Edición de equipo';
         v_details := 'Se modificaron datos del equipo ' || NEW.codigo_unico;
@@ -285,12 +299,19 @@ BEGIN
   ELSIF TG_TABLE_NAME = 'prestamos' THEN
     v_module := 'prestamos';
     IF TG_OP = 'INSERT' THEN
+      SELECT nombre INTO v_lugar_nombre FROM public.lugares WHERE id = NEW.lugar_id;
+      SELECT codigo_unico INTO v_equipo_codigo FROM public.equipos WHERE id = NEW.equipo_id;
       v_action := 'Préstamo registrado';
-      v_details := 'Préstamo registrado para equipo ID ' || NEW.equipo_id;
+      v_details := 'Equipo ' || COALESCE(v_equipo_codigo, 'ID ' || NEW.equipo_id) || ' pasó a "en_uso" en ' || 
+                   COALESCE(v_lugar_nombre, CASE WHEN NEW.lugar_id = 'personal' THEN 'Préstamo Personal' ELSE NEW.lugar_id END) || 
+                   ' (responsable: ' || COALESCE(NEW.responsable, 'General') || ')';
     ELSIF TG_OP = 'UPDATE' THEN
       IF OLD.estado <> NEW.estado THEN
+        SELECT nombre INTO v_lugar_nombre FROM public.lugares WHERE id = NEW.lugar_id;
+        SELECT codigo_unico INTO v_equipo_codigo FROM public.equipos WHERE id = NEW.equipo_id;
         v_action := 'Devolución de equipo';
-        v_details := 'Préstamo ID ' || NEW.id || ' marcado como ' || NEW.estado;
+        v_details := 'Equipo ' || COALESCE(v_equipo_codigo, 'ID ' || NEW.equipo_id) || ' pasó a "disponible" desde ' || 
+                     COALESCE(v_lugar_nombre, CASE WHEN NEW.lugar_id = 'personal' THEN 'Préstamo Personal' ELSE NEW.lugar_id END);
       ELSE
         v_action := 'Edición de préstamo';
         v_details := 'Se editó el préstamo ID ' || NEW.id;
