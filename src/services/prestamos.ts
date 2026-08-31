@@ -141,33 +141,56 @@ export async function preventDuplicateLoan(equipoId: string): Promise<boolean> {
   return !data || data.length === 0
 }
 
-// Crear un préstamo
-export async function createPrestamo(data: Omit<Prestamo, 'id' | 'is_deleted'>) {
-  // 1. Obtener nombre del lugar para trazabilidad
-  let lugarNombre = data.lugar_id
-  if (data.lugar_id === 'personal') {
-    lugarNombre = `Préstamo Personal (${data.responsable || 'Sin asignar'})`
-  } else {
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const PERSONAL_LOAN_UUID = '00000000-0000-0000-0000-000000000000'
+
+async function resolveLugarNombre(lugarId?: string | null, responsable?: string | null, observaciones?: string | null): Promise<string> {
+  if (!lugarId || lugarId === 'personal' || lugarId === PERSONAL_LOAN_UUID || observaciones?.startsWith('[PERSONAL]')) {
+    return `Préstamo Personal (${responsable?.trim() || 'Sin asignar'})`
+  }
+  if (!UUID_REGEX.test(lugarId)) {
+    return lugarId
+  }
+  try {
     const { data: lugarData } = await supabase
       .from('lugares')
       .select('nombre')
-      .eq('id', data.lugar_id)
+      .eq('id', lugarId)
       .maybeSingle()
     if (lugarData?.nombre) {
-      lugarNombre = lugarData.nombre
+      return lugarData.nombre
     }
+  } catch (err) {
+    console.warn('Error resolviendo nombre de lugar:', err)
   }
+  return 'Lugar'
+}
+
+async function resolveEquipoCodigo(equipoId?: string | null): Promise<string> {
+  if (!equipoId) return 'Equipo'
+  if (!UUID_REGEX.test(equipoId)) return equipoId
+  try {
+    const { data: eqData } = await supabase
+      .from('equipos')
+      .select('codigo_unico')
+      .eq('id', equipoId)
+      .maybeSingle()
+    if (eqData?.codigo_unico) {
+      return eqData.codigo_unico
+    }
+  } catch (err) {
+    console.warn('Error resolviendo código de equipo:', err)
+  }
+  return equipoId
+}
+
+// Crear un préstamo
+export async function createPrestamo(data: Omit<Prestamo, 'id' | 'is_deleted'>) {
+  // 1. Obtener nombre del lugar para trazabilidad
+  const lugarNombre = await resolveLugarNombre(data.lugar_id, data.responsable, data.observaciones)
 
   // 2. Obtener código único del equipo
-  let equipoCodigo = data.equipo_id
-  const { data: eqData } = await supabase
-    .from('equipos')
-    .select('codigo_unico')
-    .eq('id', data.equipo_id)
-    .maybeSingle()
-  if (eqData?.codigo_unico) {
-    equipoCodigo = eqData.codigo_unico
-  }
+  const equipoCodigo = await resolveEquipoCodigo(data.equipo_id)
 
   // 3. Obtener usuario responsable
   const { data: authData } = await supabase.auth.getUser()
@@ -225,10 +248,10 @@ export async function createPrestamo(data: Omit<Prestamo, 'id' | 'is_deleted'>) 
 
 // Marcar devolución de un préstamo
 export async function marcarDevolucion(prestamoId: string) {
-  // Obtener detalles del préstamo para saber qué equipo devolver y su lugar de origen
+  // 1. Obtener detalles del préstamo para saber qué equipo devolver y su lugar de origen
   const { data: prestamo, error: getError } = await supabase
     .from('prestamos')
-    .select('equipo_id, lugar_id, responsable')
+    .select('equipo_id, lugar_id, responsable, observaciones')
     .eq('id', prestamoId)
     .single()
 
@@ -236,46 +259,11 @@ export async function marcarDevolucion(prestamoId: string) {
     throw getError || new Error('Préstamo no encontrado')
   }
 
-  let lugarNombre = prestamo.lugar_id
-  if (prestamo.lugar_id === 'personal') {
-    lugarNombre = `Préstamo Personal (${prestamo.responsable || 'Sin asignar'})`
-  } else {
-    const { data: lugarData } = await supabase
-      .from('lugares')
-      .select('nombre')
-      .eq('id', prestamo.lugar_id)
-      .maybeSingle()
-    if (lugarData?.nombre) {
-      lugarNombre = lugarData.nombre
-    }
-  }
+  // 2. Resolver nombres amigables
+  const lugarNombre = await resolveLugarNombre(prestamo.lugar_id, prestamo.responsable, prestamo.observaciones)
+  const equipoCodigo = await resolveEquipoCodigo(prestamo.equipo_id)
 
-  // Obtener código único del equipo
-  let equipoCodigo = prestamo.equipo_id
-  const { data: eqData } = await supabase
-    .from('equipos')
-    .select('codigo_unico')
-    .eq('id', prestamo.equipo_id)
-    .maybeSingle()
-  if (eqData?.codigo_unico) {
-    equipoCodigo = eqData.codigo_unico
-  }
-
-  // Obtener usuario responsable
-  const { data: authData } = await supabase.auth.getUser()
-  let userShortName = 'Usuario'
-  if (authData?.user?.id) {
-    const { data: prof } = await supabase
-      .from('profiles')
-      .select('short_name')
-      .eq('id', authData.user.id)
-      .maybeSingle()
-    if (prof?.short_name) {
-      userShortName = prof.short_name
-    }
-  }
-
-  // Marcar préstamo como devuelto
+  // 3. Marcar préstamo como devuelto
   const { error: updateError } = await supabase
     .from('prestamos')
     .update({
@@ -288,11 +276,24 @@ export async function marcarDevolucion(prestamoId: string) {
     throw updateError
   }
 
-  // Cambiar el estado del equipo a 'disponible' (ubicación liberada)
-  await updateEquipoEstado(prestamo.equipo_id, 'disponible', '')
+  // 4. Cambiar el estado del equipo a 'disponible' (ubicación liberada)
+  await updateEquipoEstado(prestamo.equipo_id, 'disponible', 'Pañol / Depósito')
 
-  // Registrar log de auditoría explícito con el lugar para asegurar que Bitácora y Auditoría lo muestren de inmediato
+  // 5. Registrar log de auditoría explícito con el lugar para asegurar que Bitácora y Auditoría lo muestren de inmediato
   try {
+    const { data: authData } = await supabase.auth.getUser()
+    let userShortName = 'Usuario'
+    if (authData?.user?.id) {
+      const { data: prof } = await supabase
+        .from('profiles')
+        .select('short_name')
+        .eq('id', authData.user.id)
+        .maybeSingle()
+      if (prof?.short_name) {
+        userShortName = prof.short_name
+      }
+    }
+
     await supabase.from('audit_logs').insert([
       {
         user_id: authData?.user?.id || null,

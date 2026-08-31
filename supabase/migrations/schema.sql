@@ -299,19 +299,23 @@ BEGIN
   ELSIF TG_TABLE_NAME = 'prestamos' THEN
     v_module := 'prestamos';
     IF TG_OP = 'INSERT' THEN
-      SELECT nombre INTO v_lugar_nombre FROM public.lugares WHERE id = NEW.lugar_id;
+      IF NEW.lugar_id IS NOT NULL AND NEW.lugar_id <> '00000000-0000-0000-0000-000000000000'::uuid THEN
+        SELECT nombre INTO v_lugar_nombre FROM public.lugares WHERE id = NEW.lugar_id;
+      END IF;
       SELECT codigo_unico INTO v_equipo_codigo FROM public.equipos WHERE id = NEW.equipo_id;
       v_action := 'Préstamo registrado';
       v_details := 'Equipo ' || COALESCE(v_equipo_codigo, 'ID ' || NEW.equipo_id) || ' pasó a "en_uso" en ' || 
-                   COALESCE(v_lugar_nombre, CASE WHEN NEW.lugar_id = 'personal' THEN 'Préstamo Personal' ELSE NEW.lugar_id END) || 
+                   COALESCE(v_lugar_nombre, 'Préstamo Personal') || 
                    ' (responsable: ' || COALESCE(NEW.responsable, 'General') || ')';
     ELSIF TG_OP = 'UPDATE' THEN
       IF OLD.estado <> NEW.estado THEN
-        SELECT nombre INTO v_lugar_nombre FROM public.lugares WHERE id = NEW.lugar_id;
+        IF NEW.lugar_id IS NOT NULL AND NEW.lugar_id <> '00000000-0000-0000-0000-000000000000'::uuid THEN
+          SELECT nombre INTO v_lugar_nombre FROM public.lugares WHERE id = NEW.lugar_id;
+        END IF;
         SELECT codigo_unico INTO v_equipo_codigo FROM public.equipos WHERE id = NEW.equipo_id;
         v_action := 'Devolución de equipo';
         v_details := 'Equipo ' || COALESCE(v_equipo_codigo, 'ID ' || NEW.equipo_id) || ' pasó a "disponible" desde ' || 
-                     COALESCE(v_lugar_nombre, CASE WHEN NEW.lugar_id = 'personal' THEN 'Préstamo Personal' ELSE NEW.lugar_id END);
+                     COALESCE(v_lugar_nombre, 'Préstamo Personal');
       ELSE
         v_action := 'Edición de préstamo';
         v_details := 'Se editó el préstamo ID ' || NEW.id;
