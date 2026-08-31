@@ -257,7 +257,12 @@ DECLARE
   v_equipo_codigo TEXT;
 BEGIN
   -- Obtener nombre corto del usuario actual de la sesión
-  SELECT short_name INTO v_short_name FROM public.profiles WHERE id = auth.uid();
+  BEGIN
+    SELECT short_name INTO v_short_name FROM public.profiles WHERE id = auth.uid();
+  EXCEPTION WHEN OTHERS THEN
+    v_short_name := 'System';
+  END;
+  
   IF v_short_name IS NULL THEN
     v_short_name := 'System';
   END IF;
@@ -298,23 +303,34 @@ BEGIN
 
   ELSIF TG_TABLE_NAME = 'prestamos' THEN
     v_module := 'prestamos';
-    IF TG_OP = 'INSERT' THEN
-      IF NEW.lugar_id IS NOT NULL AND NEW.lugar_id <> '00000000-0000-0000-0000-000000000000'::uuid THEN
+    v_lugar_nombre := NULL;
+    v_equipo_codigo := NULL;
+
+    BEGIN
+      IF NEW.lugar_id IS NOT NULL AND NEW.lugar_id::text <> '00000000-0000-0000-0000-000000000000' THEN
         SELECT nombre INTO v_lugar_nombre FROM public.lugares WHERE id = NEW.lugar_id;
       END IF;
-      SELECT codigo_unico INTO v_equipo_codigo FROM public.equipos WHERE id = NEW.equipo_id;
+    EXCEPTION WHEN OTHERS THEN
+      v_lugar_nombre := NULL;
+    END;
+
+    BEGIN
+      IF NEW.equipo_id IS NOT NULL THEN
+        SELECT codigo_unico INTO v_equipo_codigo FROM public.equipos WHERE id = NEW.equipo_id;
+      END IF;
+    EXCEPTION WHEN OTHERS THEN
+      v_equipo_codigo := NULL;
+    END;
+
+    IF TG_OP = 'INSERT' THEN
       v_action := 'Préstamo registrado';
-      v_details := 'Equipo ' || COALESCE(v_equipo_codigo, 'ID ' || NEW.equipo_id) || ' pasó a "en_uso" en ' || 
+      v_details := 'Equipo ' || COALESCE(v_equipo_codigo, 'ID ' || COALESCE(NEW.equipo_id::text, '')) || ' pasó a "en_uso" en ' || 
                    COALESCE(v_lugar_nombre, 'Préstamo Personal') || 
                    ' (responsable: ' || COALESCE(NEW.responsable, 'General') || ')';
     ELSIF TG_OP = 'UPDATE' THEN
       IF OLD.estado <> NEW.estado THEN
-        IF NEW.lugar_id IS NOT NULL AND NEW.lugar_id <> '00000000-0000-0000-0000-000000000000'::uuid THEN
-          SELECT nombre INTO v_lugar_nombre FROM public.lugares WHERE id = NEW.lugar_id;
-        END IF;
-        SELECT codigo_unico INTO v_equipo_codigo FROM public.equipos WHERE id = NEW.equipo_id;
         v_action := 'Devolución de equipo';
-        v_details := 'Equipo ' || COALESCE(v_equipo_codigo, 'ID ' || NEW.equipo_id) || ' pasó a "disponible" desde ' || 
+        v_details := 'Equipo ' || COALESCE(v_equipo_codigo, 'ID ' || COALESCE(NEW.equipo_id::text, '')) || ' pasó a "disponible" desde ' || 
                      COALESCE(v_lugar_nombre, 'Préstamo Personal');
       ELSE
         v_action := 'Edición de préstamo';
@@ -359,11 +375,16 @@ BEGIN
     END IF;
   END IF;
 
-  INSERT INTO public.audit_logs (user_id, user_short_name, action_type, details, module)
-  VALUES (auth.uid(), v_short_name, v_action, v_details, v_module);
+  BEGIN
+    INSERT INTO public.audit_logs (user_id, user_short_name, action_type, details, module)
+    VALUES (auth.uid(), v_short_name, v_action, v_details, v_module);
+  EXCEPTION WHEN OTHERS THEN
+    -- Nunca bloquear la operación original si la inserción de auditoría falla
+  END;
 
   RETURN COALESCE(NEW, OLD);
 END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Adjuntar triggers de auditoría
